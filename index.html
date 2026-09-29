@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="pt-BR" data-privacy="off">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>i7even Store · Controle de pedidos</title>
+  <meta name="description" content="Sistema de controle de pedidos da i7even Store.">
+
+  <!-- Painel interno: não deve aparecer em buscador nenhum. -->
+  <meta name="robots" content="noindex, nofollow, noarchive">
+  <meta name="referrer" content="strict-origin-when-cross-origin">
+  <meta name="color-scheme" content="light dark">
+  <meta name="theme-color" content="#f4f4f2">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="i7even">
+
+  <link rel="icon" href="assets/brand/i7even-avatar-7.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="assets/brand/i7even-avatar-7.svg">
+  <link rel="manifest" href="manifest.webmanifest">
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="preconnect" href="https://vsfrnhynhzhpzeymavtx.supabase.co" crossorigin>
+  <!-- Sora e IBM Plex Mono: as duas fontes da identidade da i7even. -->
+  <link rel="stylesheet"
+        href="https://fonts.googleapis.com/css2?family=Sora:wght@200..700&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
+
+  <link rel="stylesheet" href="assets/css/tokens.css">
+  <link rel="stylesheet" href="assets/css/base.css">
+  <link rel="stylesheet" href="assets/css/layout.css">
+  <link rel="stylesheet" href="assets/css/components.css">
+  <link rel="stylesheet" href="assets/css/charts.css">
+  <!-- Camada mobile/iOS por último: ela sobrescreve o que vem acima. -->
+  <link rel="stylesheet" href="assets/css/mobile.css">
+
+  <!-- Aplica o tema salvo antes da primeira pintura — evita o "flash" branco. -->
+  <script src="assets/js/preload-theme.js"></script>
+</head>
+<body>
+  <div id="app">
+    <div class="boot">
+      <div class="col gap-4" style="align-items:center">
+        <div class="spinner"></div>
+        <p class="small dim">Carregando…</p>
+      </div>
+    </div>
+  </div>
+
+  <noscript>
+    <div style="padding:40px;text-align:center;font:15px system-ui">
+      <h1>JavaScript desativado</h1>
+      <p>Este sistema precisa de JavaScript para funcionar. Ative nas configurações do navegador.</p>
+    </div>
+  </noscript>
+
+  <script type="module" src="assets/js/app.js"></script>
+</body>
+</html>

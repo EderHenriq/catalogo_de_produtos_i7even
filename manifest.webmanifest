@@ -1,0 +1,28 @@
+{
+  "name": "i7even Store · Controle de pedidos",
+  "short_name": "i7even",
+  "description": "Controle de pedidos da i7even Store.",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "background_color": "#0e0f11",
+  "theme_color": "#0e0f11",
+  "lang": "pt-BR",
+  "dir": "ltr",
+  "categories": ["business", "productivity"],
+  "icons": [
+    {
+      "src": "assets/brand/i7even-avatar-7.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    },
+    {
+      "src": "assets/brand/i7even-avatar-7.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "maskable"
+    }
+  ]
+}

@@ -1,0 +1,25 @@
+# Sistema operacional
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Editores
+.vscode/
+.idea/
+*.swp
+
+# Nunca versionar segredos: a service_role key jamais entra no repositório.
+.env
+.env.*
+*.key
+secrets.json
+
+# Netlify / build local
+.netlify/
+node_modules/
+
+# Backups baixados pelo próprio sistema
+backup-i7even-*.json
+pedidos-i7even-*.csv
+itens-i7even-*.csv
+clientes-i7even-*.csv

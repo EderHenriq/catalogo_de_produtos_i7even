@@ -1,0 +1,78 @@
+#  Netlify — i7even Store
+#  Site estático puro: não há build, o Netlify só publica os arquivos da raiz.
+
+[build]
+  publish = "."
+  command = ""
+
+# --------------------------------------------------------------- cabeçalhos
+
+[[headers]]
+  for = "/*"
+  [headers.values]
+    # Só HTTPS, por um ano, incluindo subdomínios.
+    Strict-Transport-Security = "max-age=31536000; includeSubDomains; preload"
+
+    # Ninguém coloca este painel dentro de um iframe.
+    X-Frame-Options = "DENY"
+
+    # O navegador respeita o Content-Type declarado, sem adivinhar.
+    X-Content-Type-Options = "nosniff"
+
+    # Não vaza a URL completa para sites externos.
+    Referrer-Policy = "strict-origin-when-cross-origin"
+
+    # Recursos do aparelho que a página nunca precisa.
+    Permissions-Policy = "accelerometer=(), camera=(), geolocation=(), gyroscope=(), magnetometer=(), microphone=(), payment=(), usb=(), interest-cohort=()"
+
+    # Painel interno: fora dos buscadores.
+    X-Robots-Tag = "noindex, nofollow, noarchive"
+
+    # Isola a janela de outras origens.
+    Cross-Origin-Opener-Policy = "same-origin"
+
+    # Lista branca do que a página pode carregar e com quem pode falar.
+    #   script-src  → nosso código + o cliente do Supabase no jsDelivr
+    #   connect-src → API e realtime do Supabase, e a consulta de CEP (ViaCEP)
+    #   style-src 'unsafe-inline' → necessário para os estilos aplicados em atributo style
+    Content-Security-Policy = """
+      default-src 'self';
+      base-uri 'self';
+      object-src 'none';
+      frame-ancestors 'none';
+      form-action 'self';
+      script-src 'self' https://cdn.jsdelivr.net;
+      style-src 'self' 'unsafe-inline' https://fonts.googleapis.com;
+      font-src 'self' https://fonts.gstatic.com;
+      img-src 'self' data:;
+      connect-src 'self' https://*.supabase.co wss://*.supabase.co https://viacep.com.br;
+      manifest-src 'self';
+      worker-src 'self';
+      upgrade-insecure-requests
+    """
+
+# O HTML nunca fica em cache: assim uma atualização aparece na hora.
+[[headers]]
+  for = "/index.html"
+  [headers.values]
+    Cache-Control = "public, max-age=0, must-revalidate"
+
+# Os arquivos do app revalidam a cada visita (rápido por ETag, mas sempre atual).
+[[headers]]
+  for = "/assets/*"
+  [headers.values]
+    Cache-Control = "public, max-age=0, must-revalidate"
+
+# O SQL do banco não precisa ser servido pelo site.
+[[headers]]
+  for = "/supabase/*"
+  [headers.values]
+    X-Robots-Tag = "noindex, nofollow"
+
+# ----------------------------------------------------------------- rotas --
+# A navegação é por hash (#/pedidos), então qualquer caminho cai no index.
+
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200
