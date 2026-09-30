@@ -40,7 +40,6 @@ export function mount(host, ctx) {
           <p class="small dim">${list.length} ${list.length === 1 ? 'cliente' : 'clientes'} ·
             ${esc(money(spent))} em compras</p>
         </div>
-        <button class="btn btn-sm" data-export>${icon('download')} Exportar</button>
       </div>
 
       ${list.length ? `
@@ -93,8 +92,6 @@ export function mount(host, ctx) {
   }
 
   root.addEventListener('click', (e) => {
-    if (e.target.closest('[data-export]')) { exportCustomers(); return; }
-
     const menuBtn = e.target.closest('[data-menu]');
     if (menuBtn) {
       const name = menuBtn.dataset.menu;
@@ -143,27 +140,6 @@ export function mount(host, ctx) {
     });
   }
 
-  function exportCustomers() {
-    const rows = Store.customers().map((c) => ({
-      Cliente: c.name,
-      Telefone: c.phone,
-      Email: c.email,
-      Documento: c.doc,
-      Cidade: c.city,
-      UF: c.uf,
-      Pedidos: c.orders,
-      TotalGasto: c.spent.toFixed(2).replace('.', ','),
-      UltimoPedido: relativeDate(c.lastAt),
-    }));
-    if (!rows.length) { toast('Nada para exportar.', { kind: 'warn' }); return; }
-    downloadFile(
-      `clientes-i7even-${new Date().toISOString().slice(0, 10)}.csv`,
-      toCSV(rows),
-      'text/csv;charset=utf-8',
-    );
-    toast(`${rows.length} clientes exportados`);
-  }
-
   const unsubscribe = Store.subscribe(() => render());
   render();
 
@@ -172,4 +148,28 @@ export function mount(host, ctx) {
     refresh: render,
     destroy() { unsubscribe(); },
   };
+}
+
+/* ---------------------------------------------------------- exportação */
+/* Chamada só pela tela de Ajustes — é lá que ficam todas as exportações. */
+
+export function exportCustomers() {
+  const rows = Store.customers().map((c) => ({
+    Cliente: c.name,
+    Telefone: c.phone,
+    Email: c.email,
+    Documento: c.doc,
+    Cidade: c.city,
+    UF: c.uf,
+    Pedidos: c.orders,
+    TotalGasto: c.spent.toFixed(2).replace('.', ','),
+    UltimoPedido: relativeDate(c.lastAt),
+  }));
+  if (!rows.length) { toast('Nada para exportar.', { kind: 'warn' }); return; }
+  downloadFile(
+    `clientes-i7even-${new Date().toISOString().slice(0, 10)}.csv`,
+    toCSV(rows),
+    'text/csv;charset=utf-8',
+  );
+  toast(`${rows.length} clientes exportados`);
 }

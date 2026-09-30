@@ -136,13 +136,11 @@ export function mount(host, ctx) {
           ${icon('filter')} Filtros
           ${extras ? `<span class="filter-count">${extras}</span>` : ''}
         </button>
-        <button class="btn btn-sm" data-export>${icon('download')} CSV</button>
       </div>
 
       <span class="spacer filters-advanced"></span>
       <div class="filters-advanced row wrap gap-3">
         ${advancedHTML()}
-        <button class="btn btn-sm" data-export>${icon('download')} CSV</button>
       </div>`;
   }
 
@@ -307,7 +305,6 @@ export function mount(host, ctx) {
         <span class="strong bulk-label">${selection.size} selecionado${selection.size > 1 ? 's' : ''}</span>
         <span class="grow hide-mobile"></span>
         <button class="btn btn-sm" data-bulk-status>${icon('refresh')} Status</button>
-        <button class="btn btn-sm" data-bulk-export>${icon('download')} Exportar</button>
         <button class="btn btn-sm" data-bulk-delete>${icon('trash')} Excluir</button>
         <button class="icon-btn sm" data-bulk-clear aria-label="Limpar seleção">${icon('x')}</button>
       </div>`;
@@ -351,8 +348,7 @@ export function mount(host, ctx) {
       return;
     }
 
-    if (e.target.closest('[data-open-filters]')) { openFilterSheet(); return; }
-    if (e.target.closest('[data-export]')) exportCSV(currentList());
+    if (e.target.closest('[data-open-filters]')) openFilterSheet();
   }
 
   function onFilterChange(e) {
@@ -485,10 +481,6 @@ export function mount(host, ctx) {
 
   $bulk.addEventListener('click', async (e) => {
     if (e.target.closest('[data-bulk-clear]')) { selection.clear(); renderAll(); return; }
-    if (e.target.closest('[data-bulk-export]')) {
-      exportCSV(Store.all().filter((o) => selection.has(o.id)));
-      return;
-    }
     if (e.target.closest('[data-bulk-delete]')) {
       const ok = await confirmDialog({
         title: `Excluir ${selection.size} pedidos?`,
@@ -549,7 +541,7 @@ export function mount(host, ctx) {
 /* ---------------------------------------------------------- exportação */
 
 export function exportCSV(list) {
-  if (!list.length) { toast('Nada para exportar com os filtros atuais.', { kind: 'warn' }); return; }
+  if (!list.length) { toast('Nenhum pedido para exportar.', { kind: 'warn' }); return; }
   const rows = list.map((o) => ({
     Pedido: String(o.code).padStart(4, '0'),
     Data: formatDate(o.orderDate || o.createdAt),

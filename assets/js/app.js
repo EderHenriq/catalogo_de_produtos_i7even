@@ -77,6 +77,7 @@ async function boot() {
   Store.startRealtime();
   renderApp();
   startIdleWatch();
+  startAutoSync();
 
   onAuthChange((event) => {
     if (event === 'SIGNED_OUT') {
@@ -161,7 +162,7 @@ function renderApp() {
                    data-search aria-label="Buscar" autocomplete="off">
             <kbd>/</kbd>
           </div>
-          <button class="icon-btn hide-mobile" data-refresh aria-label="Recarregar">${icon('refresh')}</button>
+          <button class="icon-btn" data-refresh aria-label="Atualizar pedidos" title="Atualizar pedidos">${icon('refresh')}</button>
           <button class="icon-btn hide-mobile" data-privacy-toggle aria-label="Modo privacidade"
                   data-privacy-icon></button>
           <button class="icon-btn hide-mobile" data-theme-toggle aria-label="Trocar tema" data-theme-icon></button>
@@ -343,13 +344,48 @@ function applyPendingSearch() {
 }
 
 async function refresh() {
+  const btns = ROOT.querySelectorAll('[data-refresh]');
+  btns.forEach((b) => { b.disabled = true; b.classList.add('is-spinning'); });
   try {
     await Store.load({ force: true });
     current?.refresh?.();
-    toast('Atualizado');
+    toast('Pedidos atualizados', { duration: 1600 });
   } catch (err) {
     toastError('Não consegui atualizar', err.message);
+  } finally {
+    btns.forEach((b) => { b.disabled = false; b.classList.remove('is-spinning'); });
   }
+}
+
+/* --------------------------------------------- sincronização automática */
+/*
+ * O realtime já empurra as mudanças do outro aparelho, mas no celular o
+ * navegador derruba a conexão quando a tela bloqueia ou o app vai para o
+ * fundo. Por isso a lista também é buscada de novo:
+ *  - ao voltar para a aba/app, ao recuperar a internet;
+ *  - a cada 20 s enquanto o realtime estiver fora do ar (com ele no ar, a
+ *    cada 2 min só como garantia).
+ * Se nada mudou, a tela não é redesenhada.
+ */
+
+let autoSyncStarted = false;
+
+function startAutoSync() {
+  if (autoSyncStarted) return;
+  autoSyncStarted = true;
+
+  const sync = (minGapMs) => {
+    if (document.hidden || !Store.isLoaded()) return;
+    if (Store.msSinceLoad() < minGapMs) return;
+    Store.load({ force: true }).catch((err) => console.warn('sincronização falhou', err));
+  };
+
+  document.addEventListener('visibilitychange', () => sync(3000));
+  window.addEventListener('focus', () => sync(3000));
+  window.addEventListener('online', () => sync(0));
+  window.addEventListener('pageshow', (e) => { if (e.persisted) sync(0); });
+
+  setInterval(() => sync(Store.isRealtimeUp() ? 120000 : 20000), 10000);
 }
 
 /* ------------------------------------------- desconexão por inatividade */

@@ -1,11 +1,13 @@
-/** Ajustes: aparência, conta, backup dos dados e status da segurança. */
+/** Ajustes: aparência, conta, backup e todas as exportações de dados. */
 
 import * as Store from '../core/store.js';
-import { getConfig, clearConfig, APP } from '../config.js';
+import { APP } from '../config.js';
 import { signOut, updatePassword, getUser } from '../core/supabase.js';
 import { getTheme, applyTheme, isPrivacy, applyPrivacy } from './theme.js';
 import { toast, toastError, confirmDialog, openModal, withLoading } from './kit.js';
 import { exportCSV } from './orders.js';
+import { exportCustomers } from './customers.js';
+import { exportItems } from './reports.js';
 import { icon } from './icons.js';
 import { esc, money, downloadFile, formatDateTime } from '../core/utils.js';
 
@@ -14,7 +16,6 @@ export function mount(host) {
   const root = host.querySelector('[data-root]');
 
   async function render() {
-    const cfg = getConfig();
     const user = await getUser().catch(() => null);
     const orders = Store.all();
     const revenue = orders.filter((o) => o.status !== 'cancelado').reduce((a, o) => a + o.total, 0);
@@ -78,43 +79,24 @@ export function mount(host) {
             <div><div class="small dim">Faturamento total</div>
                  <div class="kpi-value sm money-sensitive">${esc(money(revenue))}</div></div>
           </div>
+          <div>
+            <div class="strong">Exportar planilhas (CSV)</div>
+            <div class="small dim">Abre no Excel ou no Google Planilhas.</div>
+          </div>
+          <div class="row gap-2 wrap">
+            <button class="btn" data-csv>${icon('download')} Pedidos</button>
+            <button class="btn" data-csv-items>${icon('download')} Itens vendidos</button>
+            <button class="btn" data-csv-customers>${icon('download')} Clientes</button>
+          </div>
+
+          <div>
+            <div class="strong">Backup completo</div>
+            <div class="small dim">O backup JSON guarda tudo, inclusive os itens de cada pedido. Guarde uma cópia
+              fora do computador de vez em quando — é o seu seguro contra qualquer imprevisto.</div>
+          </div>
           <div class="row gap-2 wrap">
             <button class="btn" data-backup>${icon('download')} Baixar backup (JSON)</button>
-            <button class="btn" data-csv>${icon('download')} Exportar tudo (CSV)</button>
             <button class="btn btn-outline" data-restore>${icon('upload')} Restaurar backup</button>
-          </div>
-          <p class="hint">O backup JSON guarda tudo, inclusive os itens de cada pedido. Guarde uma cópia
-            fora do computador de vez em quando — é o seu seguro contra qualquer imprevisto.</p>
-        </div>
-      </div>
-
-      <div class="card">
-        <div class="card-head"><h3>Conexão e segurança</h3></div>
-        <div class="card-body col gap-4">
-          <dl class="detail-grid">
-            <div class="detail-item"><dt>Projeto Supabase</dt>
-              <dd class="truncate small">${esc(cfg?.url || '—')}</dd></div>
-            <div class="detail-item"><dt>Chave em uso</dt>
-              <dd class="small">anon/public · ${esc(cfg?.anonKey ? `…${cfg.anonKey.slice(-6)}` : '—')}</dd></div>
-            <div class="detail-item"><dt>Origem da configuração</dt>
-              <dd class="small">${esc(cfg?.source === 'arquivo' ? 'config.js do projeto' : 'salva neste navegador')}</dd></div>
-          </dl>
-
-          <div class="alert" data-kind="info">
-            ${icon('lock')}
-            <div>
-              <b>Como seus dados estão protegidos</b>
-              <ul style="margin-top:6px;display:flex;flex-direction:column;gap:3px">
-                <li>· Cada pedido é gravado com o seu ID de usuário e o banco só devolve linhas suas (RLS).</li>
-                <li>· A chave que fica no navegador é a <i>anon</i>, pública por natureza e inútil sem login.</li>
-                <li>· O site é servido só por HTTPS, sem permissão para ser colocado dentro de iframe de terceiros.</li>
-                <li>· Nenhum dado de cliente passa por outro servidor além do Supabase.</li>
-              </ul>
-            </div>
-          </div>
-
-          <div class="row gap-2 wrap">
-            <button class="btn btn-sm btn-outline" data-reset-config>${icon('refresh')} Trocar projeto Supabase</button>
           </div>
         </div>
       </div>`;
@@ -138,19 +120,9 @@ export function mount(host) {
     if (e.target.closest('[data-password]')) { changePassword(); return; }
     if (e.target.closest('[data-backup]')) { backup(); return; }
     if (e.target.closest('[data-csv]')) { exportCSV(Store.all()); return; }
+    if (e.target.closest('[data-csv-items]')) { exportItems(); return; }
+    if (e.target.closest('[data-csv-customers]')) { exportCustomers(); return; }
     if (e.target.closest('[data-restore]')) { restore(); return; }
-
-    if (e.target.closest('[data-reset-config]')) {
-      const ok = await confirmDialog({
-        title: 'Trocar o projeto Supabase?',
-        message: 'A configuração salva neste navegador será apagada e você precisará informar URL e chave de novo. Os pedidos continuam no banco.',
-        confirmText: 'Trocar', danger: true,
-      });
-      if (!ok) return;
-      clearConfig();
-      await signOut().catch(() => {});
-      location.reload();
-    }
   });
 
   root.addEventListener('change', (e) => {

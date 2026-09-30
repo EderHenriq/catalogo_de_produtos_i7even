@@ -328,6 +328,7 @@
   text-align: center;
   line-height: 1.6;
 }
+.gate-foot .icon { width: 14px; height: 14px; vertical-align: -2px; }
 
 /* Tela cheia de carregamento inicial */
 .boot {

@@ -66,6 +66,7 @@
 .icon-btn .icon { width: 18px; height: 18px; }
 .icon-btn.sm { width: 28px; height: 28px; }
 .icon-btn.sm .icon { width: 15px; height: 15px; }
+.icon-btn.is-spinning .icon { animation: spin .8s linear infinite; }
 
 .btn .spinner, .btn-loading .icon { display: none; }
 .btn-loading::before {

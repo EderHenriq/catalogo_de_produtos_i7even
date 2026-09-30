@@ -126,7 +126,6 @@ export function mount(host) {
             ${Object.entries(PERIODS).map(([k, label]) => `
               <button type="button" data-period="${k}" aria-pressed="${period === k}">${esc(label)}</button>`).join('')}
           </div>
-          <button class="btn btn-sm" data-export-items>${icon('download')} Itens (CSV)</button>
         </div>
       </div>`;
 
@@ -318,44 +317,42 @@ export function mount(host) {
 
   root.addEventListener('click', (e) => {
     const p = e.target.closest('[data-period]');
-    if (p) { period = p.dataset.period; render(); return; }
-    if (e.target.closest('[data-export-items]')) exportItems();
+    if (p) { period = p.dataset.period; render(); }
   });
-
-  function exportItems() {
-    const [from, to] = rangeFor(period);
-    const orders = Store.all().filter((o) => {
-      const d = new Date(o.orderDate || o.createdAt);
-      return d >= from && d < to;
-    });
-    const rows = itemRows(orders).map((r) => ({
-      Pedido: String(r.order.code).padStart(4, '0'),
-      Data: formatDate(r.order.orderDate || r.order.createdAt),
-      Status: STATUS_MAP[r.order.status]?.label || r.order.status,
-      Cliente: r.order.customerName,
-      Categoria: r.categoryLabel,
-      Produto: r.name,
-      Variacao: r.variant,
-      Cor: r.color,
-      Condicao: r.item.condition,
-      IMEI: r.item.serial,
-      Qtd: r.qty,
-      ValorUnitario: (Number(r.item.unitPrice) || 0).toFixed(2).replace('.', ','),
-      CustoUnitario: (Number(r.item.unitCost) || 0).toFixed(2).replace('.', ','),
-      Faturamento: r.revenue.toFixed(2).replace('.', ','),
-      Lucro: r.profit.toFixed(2).replace('.', ','),
-    }));
-    if (!rows.length) { toast('Nenhum item no período.', { kind: 'warn' }); return; }
-    downloadFile(
-      `itens-i7even-${new Date().toISOString().slice(0, 10)}.csv`,
-      toCSV(rows),
-      'text/csv;charset=utf-8',
-    );
-    toast(`${rows.length} linhas exportadas`);
-  }
 
   const unsubscribe = Store.subscribe(() => render());
   render();
 
   return { refresh: render, destroy() { unsubscribe(); chart?.destroy(); } };
+}
+
+/* ---------------------------------------------------------- exportação */
+/* Chamada só pela tela de Ajustes — é lá que ficam todas as exportações. */
+
+/** Uma linha por item vendido, de todos os pedidos. */
+export function exportItems(orders = Store.all()) {
+  const rows = itemRows(orders).map((r) => ({
+    Pedido: String(r.order.code).padStart(4, '0'),
+    Data: formatDate(r.order.orderDate || r.order.createdAt),
+    Status: STATUS_MAP[r.order.status]?.label || r.order.status,
+    Cliente: r.order.customerName,
+    Categoria: r.categoryLabel,
+    Produto: r.name,
+    Variacao: r.variant,
+    Cor: r.color,
+    Condicao: r.item.condition,
+    IMEI: r.item.serial,
+    Qtd: r.qty,
+    ValorUnitario: (Number(r.item.unitPrice) || 0).toFixed(2).replace('.', ','),
+    CustoUnitario: (Number(r.item.unitCost) || 0).toFixed(2).replace('.', ','),
+    Faturamento: r.revenue.toFixed(2).replace('.', ','),
+    Lucro: r.profit.toFixed(2).replace('.', ','),
+  }));
+  if (!rows.length) { toast('Nenhum item para exportar.', { kind: 'warn' }); return; }
+  downloadFile(
+    `itens-i7even-${new Date().toISOString().slice(0, 10)}.csv`,
+    toCSV(rows),
+    'text/csv;charset=utf-8',
+  );
+  toast(`${rows.length} linhas exportadas`);
 }

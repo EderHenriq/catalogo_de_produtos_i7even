@@ -98,10 +98,7 @@ export function renderLogin(host, { onDone }) {
       <div class="alert hide" data-error data-kind="error">${icon('alert')}<div data-error-text></div></div>
       <button class="btn btn-primary btn-lg btn-block" type="submit">Entrar</button>
       <button class="btn btn-ghost btn-sm" type="button" data-forgot>Esqueci minha senha</button>
-    </form>
-    <div class="gate-foot">
-      ${icon('lock')} Conexão protegida. Seus pedidos só são visíveis depois do login.
-    </div>`);
+    </form>`);
 
   const form = host.querySelector('[data-form]');
   const errBox = host.querySelector('[data-error]');

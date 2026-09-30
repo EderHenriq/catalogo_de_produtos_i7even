@@ -329,3 +329,18 @@ grant select on public.order_payments_view to authenticated;
 -- Conferência rápida — deve devolver as duas linhas, Eder e Julie:
 --   select m.nome, u.email
 --   from public.store_members m join auth.users u on u.id = m.user_id;
+
+-- ------------------------------------------------------------- realtime --
+-- Faz o Supabase avisar os aparelhos abertos a cada pedido criado, editado
+-- ou excluído — é o que atualiza a tela do outro sem precisar recarregar.
+-- Sem isto, o canal conecta mas nunca recebe nada.
+
+do $$
+begin
+  if not exists (
+    select 1 from pg_publication_tables
+    where pubname = 'supabase_realtime' and schemaname = 'public' and tablename = 'orders'
+  ) then
+    alter publication supabase_realtime add table public.orders;
+  end if;
+end $$;

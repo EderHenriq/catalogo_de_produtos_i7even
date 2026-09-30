@@ -13,6 +13,9 @@ const listeners = new Set();
 let orders = [];
 let loaded = false;
 let realtimeChannel = null;
+let inflight = null;       // carga em andamento — cliques repetidos reaproveitam
+let lastLoadAt = 0;        // quando a última carga completa terminou (ms)
+let realtimeUp = false;    // canal de realtime conectado agora?
 
 /** E-mail de quem está logado — carimbado no pedido na hora de criar. */
 let currentEmail = '';
@@ -231,15 +234,44 @@ function emit() {
 
 export async function load({ force = false } = {}) {
   if (loaded && !force) return orders;
-  const { data, error } = await getClient()
-    .from('orders')
-    .select('*')
-    .order('created_at', { ascending: false });
-  if (error) throw error;
-  orders = (data || []).map(fromRow);
-  loaded = true;
-  emit();
-  return orders;
+  if (inflight) return inflight;
+  inflight = (async () => {
+    const { data, error } = await getClient()
+      .from('orders')
+      .select('*')
+      .order('created_at', { ascending: false });
+    if (error) throw error;
+    const next = (data || []).map(fromRow);
+    const changed = !loaded || signature(next) !== signature(orders);
+    orders = next;
+    loaded = true;
+    lastLoadAt = Date.now();
+    // Só redesenha se algo mudou: a sincronização automática roda com
+    // frequência e não deve piscar a tela (nem fechar menus abertos) à toa.
+    if (changed) emit();
+    return orders;
+  })();
+  try {
+    return await inflight;
+  } finally {
+    inflight = null;
+  }
+}
+
+/** Impressão digital barata da lista: id + última alteração de cada pedido. */
+function signature(list) {
+  let s = '';
+  for (const o of list) s += `${o.id}:${o.updatedAt}|`;
+  return s;
+}
+
+/** Milissegundos desde a última carga completa. */
+export function msSinceLoad() {
+  return lastLoadAt ? Date.now() - lastLoadAt : Infinity;
+}
+
+export function isRealtimeUp() {
+  return realtimeUp;
 }
 
 export function all() {
@@ -280,13 +312,19 @@ export async function create(order) {
 }
 
 export async function update(id, order) {
-  const { data, error } = await getClient()
-    .from('orders')
-    .update(toRow(order))
-    .eq('id', id)
-    .select()
-    .single();
+  let query = getClient().from('orders').update(toRow(order)).eq('id', id);
+  // Trava contra edição simultânea: só grava se o pedido ainda estiver na
+  // versão que foi aberta. Sem isto, a última pessoa a salvar apagaria em
+  // silêncio o que a outra lançou (ex.: um pagamento) no mesmo pedido.
+  if (order.updatedAt) query = query.eq('updated_at', order.updatedAt);
+  const { data, error } = await query.select().maybeSingle();
   if (error) throw error;
+  if (!data) {
+    await load({ force: true }).catch(() => {});
+    throw new Error(byId(id)
+      ? 'Este pedido foi alterado em outro aparelho enquanto você editava. A tela já foi atualizada: abra o pedido de novo e refaça a alteração.'
+      : 'Este pedido foi excluído em outro aparelho.');
+  }
   const saved = fromRow(data);
   orders = orders.map((o) => (o.id === id ? saved : o));
   emit();
@@ -326,11 +364,13 @@ export async function setStatus(id, status) {
 /* -------------------------------------------------------------- realtime */
 /* Mantém a aba sincronizada se você mexer no pedido pelo celular. */
 
+let reconnectTimer = null;
+
 export function startRealtime() {
   if (realtimeChannel) return;
-  const supabase = getClient();
-  realtimeChannel = supabase
-    .channel('orders-sync')
+  const channel = getClient().channel('orders-sync');
+  realtimeChannel = channel;
+  channel
     .on('postgres_changes', { event: '*', schema: 'public', table: 'orders' }, (payload) => {
       if (payload.eventType === 'DELETE') {
         orders = orders.filter((o) => o.id !== payload.old.id);
@@ -341,10 +381,32 @@ export function startRealtime() {
       }
       emit();
     })
-    .subscribe();
+    .subscribe((status) => {
+      if (realtimeChannel !== channel) return; // aviso de um canal já descartado
+      if (status === 'SUBSCRIBED') {
+        const wasDown = !realtimeUp;
+        realtimeUp = true;
+        // Voltou depois de cair (celular bloqueado, troca de rede…): o que
+        // mudou nesse meio-tempo não chega pelo canal, então busca tudo.
+        if (wasDown && loaded) load({ force: true }).catch(() => {});
+      } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || status === 'CLOSED') {
+        realtimeUp = false;
+        scheduleReconnect();
+      }
+    });
+}
+
+function scheduleReconnect() {
+  clearTimeout(reconnectTimer);
+  reconnectTimer = setTimeout(() => {
+    stopRealtime();
+    if (loaded) startRealtime();
+  }, 5000);
 }
 
 export function stopRealtime() {
+  clearTimeout(reconnectTimer);
+  realtimeUp = false;
   if (!realtimeChannel) return;
   try { getClient().removeChannel(realtimeChannel); } catch { /* client já derrubado */ }
   realtimeChannel = null;
