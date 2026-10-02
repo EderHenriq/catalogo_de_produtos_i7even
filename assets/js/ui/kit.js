@@ -47,6 +47,9 @@ export const toastInfo = (title, text) => toast(title, { text, kind: 'info' });
 
 /* ------------------------------------------------------------- modal -- */
 
+let openModals = 0;
+const TOUCH = window.matchMedia('(hover: none) and (pointer: coarse)');
+
 /**
  * @param {{title: string, subtitle?: string, body: string, footer?: string,
  *          size?: 'sm'|'lg'|'xl', onMount?: (panel: HTMLElement, api: object) => void,
@@ -73,6 +76,7 @@ export function openModal(spec) {
     </div>`;
 
   document.body.appendChild(dlg);
+  openModals += 1;
   document.body.style.overflow = 'hidden';
 
   const api = {
@@ -84,7 +88,10 @@ export function openModal(spec) {
       if (!dlg.isConnected) return;
       dlg.close();
       dlg.remove();
-      document.body.style.overflow = '';
+      // Modal dentro de modal (ex.: editar item dentro do pedido): a página
+      // de trás só volta a rolar quando o último fechar.
+      openModals = Math.max(openModals - 1, 0);
+      if (!openModals) document.body.style.overflow = '';
       spec.onClose?.(result);
     },
   };
@@ -97,10 +104,21 @@ export function openModal(spec) {
   });
   dlg.addEventListener('cancel', (e) => { e.preventDefault(); api.close(); });
 
+  // Nos diálogos curtos (pagamento, item, senha), "OK"/"Ir" do teclado confirma.
+  dlg.addEventListener('keydown', (e) => {
+    if (e.key !== 'Enter' || !e.target.matches('input')) return;
+    const ok = api.foot?.querySelector('[data-ok]');
+    if (!ok || ok.disabled) return;
+    e.preventDefault();
+    ok.click();
+  });
+
   dlg.showModal();
   spec.onMount?.(api.panel, api);
 
-  // Foco no primeiro campo útil.
+  // Foco no primeiro campo útil. Na tela de toque não: o teclado subiria
+  // cobrindo metade do formulário antes de a pessoa escolher onde mexer.
+  if (TOUCH.matches) return api;
   requestAnimationFrame(() => {
     const first = api.panel.querySelector('[data-autofocus], input:not([type=hidden]), textarea, select');
     if (first) first.focus();
@@ -193,7 +211,7 @@ export function closeMenu() {
 }
 
 window.addEventListener('resize', closeMenu);
-window.addEventListener('scroll', closeMenu, true);
+window.addEventListener('scroll', closeMenu, { capture: true, passive: true });
 
 /* ------------------------------------------------------- estado vazio - */
 

@@ -1,7 +1,7 @@
 /**
  * Pagamentos de um pedido: sinal, parcelas, complementos.
  *
- * A loja recebe em pedaços — um sinal no PIX, o resto em duas vezes, às vezes
+ * A loja recebe em pedaços - um sinal no PIX, o resto em duas vezes, às vezes
  * um complemento em dinheiro na entrega. Guardar só "quanto já recebi" perde a
  * informação de quando e por onde entrou. Aqui cada entrada é um lançamento.
  *
@@ -13,7 +13,7 @@ import { newPaymentDraft } from '../core/store.js';
 import { PAYMENT_METHODS } from '../core/constants.js';
 import { openModal, confirmDialog } from './kit.js';
 import { icon } from './icons.js';
-import { esc, money, parseMoney, formatDate, todayISO } from '../core/utils.js';
+import { esc, money, parseMoney, moneyInputValue, formatDate, todayISO } from '../core/utils.js';
 
 /** Soma dos lançamentos. */
 export function totalPago(order) {
@@ -25,7 +25,7 @@ export function saldoAberto(order, total) {
   return Math.max(Math.round((total - totalPago(order)) * 100) / 100, 0);
 }
 
-/** Quanto passou do total — troco a devolver, ou erro de lançamento. */
+/** Quanto passou do total - troco a devolver, ou erro de lançamento. */
 export function excedente(order, total) {
   return Math.max(Math.round((totalPago(order) - total) * 100) / 100, 0);
 }
@@ -118,9 +118,8 @@ export function openPaymentDialog({ payment = null, saldo = 0, metodoPadrao = ''
         <div class="field span-6">
           <label class="label" for="pay-amount">Valor recebido</label>
           <div class="money-input">
-            <input class="input" id="pay-amount" inputmode="decimal" data-autofocus
-                   value="${p.amount ? esc(String(p.amount.toFixed(2)).replace('.', ',')) : ''}"
-                   placeholder="0,00">
+            <input class="input" id="pay-amount" inputmode="numeric" autocomplete="off" data-autofocus
+                   value="${esc(moneyInputValue(p.amount))}" placeholder="0,00">
           </div>
         </div>
         <div class="field span-6">
@@ -130,7 +129,7 @@ export function openPaymentDialog({ payment = null, saldo = 0, metodoPadrao = ''
         <div class="field span-12">
           <label class="label" for="pay-method">Como recebeu</label>
           <select class="select" id="pay-method">
-            <option value="">—</option>
+            <option value="">-</option>
             ${PAYMENT_METHODS.map((m) => `<option ${m === p.method ? 'selected' : ''}>${esc(m)}</option>`).join('')}
           </select>
         </div>
@@ -161,7 +160,7 @@ export function openPaymentDialog({ payment = null, saldo = 0, metodoPadrao = ''
   modal.body.addEventListener('click', (e) => {
     const atalho = e.target.closest('[data-atalho]');
     if (!atalho) return;
-    $('#pay-amount').value = Number(atalho.dataset.atalho).toFixed(2).replace('.', ',');
+    $('#pay-amount').value = moneyInputValue(atalho.dataset.atalho);
     $('#pay-amount').focus();
   });
 

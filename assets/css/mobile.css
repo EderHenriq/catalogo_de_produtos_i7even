@@ -1,5 +1,5 @@
 /* =====================================================================
-   Camada mobile / iOS — carregada por último.
+   Camada mobile / iOS - carregada por último.
    Alvo: Safari no iPhone 13 (390×844), iPhone 15 (393×852) e
    iPhone 17 Pro Max (440×956).
 
@@ -29,6 +29,12 @@ input, textarea, [contenteditable] {
   -webkit-touch-callout: default;
   -webkit-user-select: text;
   user-select: text;
+}
+
+/* Sem o zoom de toque duplo: o navegador não precisa esperar para saber se
+   vem um segundo toque, e botão tocado rápido duas vezes não amplia a tela. */
+button, a, input, select, textarea, label, summary {
+  touch-action: manipulation;
 }
 
 /* ===================================================================== */
@@ -180,6 +186,13 @@ input, textarea, [contenteditable] {
 /* ===================================================================== */
 
 @media (max-width: 860px) {
+  /* O modal cobre a tela toda: o desfoque do fundo ninguém vê, mas a placa
+     de vídeo continua calculando a cada quadro. */
+  dialog.modal::backdrop {
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+  }
+
   .modal-head {
     padding: 13px var(--sp-4);
     padding-top: calc(13px + var(--safe-t));
@@ -201,7 +214,7 @@ input, textarea, [contenteditable] {
     padding: var(--sp-3) var(--sp-4) calc(var(--sp-3) + var(--safe-b));
     gap: var(--sp-2);
   }
-  /* A ação principal ocupa o espaço que sobra — polegar acerta sempre. */
+  /* A ação principal ocupa o espaço que sobra - polegar acerta sempre. */
   .modal-foot .btn-primary { flex: 1 1 auto; }
   .modal-foot .btn-ghost[data-close] { flex: 0 0 auto; }
 
@@ -252,7 +265,7 @@ input, textarea, [contenteditable] {
 @media (max-width: 860px) {
   /*
    * Item de flex tem `min-width: auto` por padrão e por isso NÃO encolhe
-   * abaixo do próprio conteúdo — foi o que esticava a página inteira quando
+   * abaixo do próprio conteúdo - foi o que esticava a página inteira quando
    * os chips passavam da largura da tela. `min-width: 0` devolve o controle.
    */
   .content > *,
@@ -430,7 +443,7 @@ input, textarea, [contenteditable] {
 /* ===================================================================== */
 /*  10b. Botão flutuante de "novo pedido"                                 */
 /*  No celular o canto superior direito é o ponto mais difícil de         */
-/*  alcançar com o polegar — ainda mais num 17 Pro Max. A ação principal  */
+/*  alcançar com o polegar - ainda mais num 17 Pro Max. A ação principal  */
 /*  desce para perto da mão.                                              */
 /* ===================================================================== */
 

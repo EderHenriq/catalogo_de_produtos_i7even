@@ -51,7 +51,7 @@ export function openOrderDetail(orderId, { onChanged } = {}) {
     host.innerHTML = `
       <div class="row wrap gap-2">
         <span class="badge" data-tone="${esc(st?.tone || 'gray')}">${esc(st?.label || order.status)}</span>
-        <span class="badge no-dot" data-tone="${esc(pay?.tone || 'gray')}">Pgto.: ${esc(pay?.label || '—')}</span>
+        <span class="badge no-dot" data-tone="${esc(pay?.tone || 'gray')}">Pgto.: ${esc(pay?.label || '-')}</span>
         ${order.priority ? `<span class="badge" data-tone="red">Urgente</span>` : ''}
         ${order.channel ? `<span class="tag">${esc(order.channel)}</span>` : ''}
       </div>
@@ -94,7 +94,7 @@ export function openOrderDetail(orderId, { onChanged } = {}) {
         <div class="totals-row"><span class="muted">Produtos</span>
           <span class="num money-sensitive">${esc(money(t.subtotal))}</span></div>
         ${t.discount ? `<div class="totals-row"><span class="muted">Desconto</span>
-          <span class="num neg money-sensitive">− ${esc(money(t.discount))}</span></div>` : ''}
+          <span class="num neg money-sensitive">- ${esc(money(t.discount))}</span></div>` : ''}
         ${t.shipping ? `<div class="totals-row"><span class="muted">Frete</span>
           <span class="num money-sensitive">${esc(money(t.shipping))}</span></div>` : ''}
         <div class="totals-row grand"><span>Total</span>
@@ -115,15 +115,15 @@ export function openOrderDetail(orderId, { onChanged } = {}) {
           ${detail('WhatsApp', order.customerPhone
             ? (wa ? `<a href="${esc(wa)}" target="_blank" rel="noopener noreferrer">${esc(maskPhone(order.customerPhone))}</a>`
                   : esc(maskPhone(order.customerPhone)))
-            : '—', true)}
-          ${detail('E-mail', order.customerEmail || '—')}
-          ${detail('Documento', order.customerDoc || '—')}
+            : '-', true)}
+          ${detail('E-mail', order.customerEmail || '-')}
+          ${detail('Documento', order.customerDoc || '-')}
           ${detail('Data do pedido', formatDate(order.orderDate))}
-          ${detail('Previsão', order.dueDate ? formatDate(order.dueDate) : '—')}
-          ${detail('Pagamento', `${order.paymentMethod || '—'}${order.installments > 1 ? ` · ${order.installments}×` : ''}`)}
-          ${detail('Envio', order.shippingMethod || '—')}
-          ${detail('Rastreio', order.trackingCode || '—')}
-          ${detail('Finalizado em', order.deliveredAt ? formatDateTime(order.deliveredAt) : '—')}
+          ${detail('Previsão', order.dueDate ? formatDate(order.dueDate) : '-')}
+          ${detail('Pagamento', `${order.paymentMethod || '-'}${order.installments > 1 ? ` · ${order.installments}×` : ''}`)}
+          ${detail('Envio', order.shippingMethod || '-')}
+          ${detail('Rastreio', order.trackingCode || '-')}
+          ${detail('Finalizado em', order.deliveredAt ? formatDateTime(order.deliveredAt) : '-')}
         </dl>
         ${address ? `<div class="alert">${icon('pin')}<div>${esc(address)}</div></div>` : ''}
         ${order.notes ? `<div class="alert">${icon('info')}<div style="white-space:pre-wrap">${esc(order.notes)}</div></div>` : ''}
@@ -259,7 +259,7 @@ export function printOrder(order) {
     <tbody>${rows || '<tr><td colspan="4"><small>Sem itens</small></td></tr>'}</tbody></table>
     <div class="tot">
       <div><span>Produtos</span><span>${esc(money(t.subtotal))}</span></div>
-      ${t.discount ? `<div><span>Desconto</span><span>− ${esc(money(t.discount))}</span></div>` : ''}
+      ${t.discount ? `<div><span>Desconto</span><span>- ${esc(money(t.discount))}</span></div>` : ''}
       ${t.shipping ? `<div><span>Frete</span><span>${esc(money(t.shipping))}</span></div>` : ''}
       <div class="g"><span>Total</span><span>${esc(money(t.total))}</span></div>
       ${order.paidAmount ? `<div><span>Recebido</span><span>${esc(money(order.paidAmount))}</span></div>` : ''}

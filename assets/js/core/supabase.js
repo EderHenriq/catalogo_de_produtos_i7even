@@ -1,6 +1,9 @@
 /** Cliente Supabase + autenticação. */
 
-import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm';
+// Versão fixa: a URL fica em cache por 1 ano no aparelho (a "@2" solta é
+// revalidada toda semana) e nenhuma atualização da biblioteca muda o app
+// sem aviso. Ao trocar, atualize também os modulepreload do index.html.
+import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.2/+esm';
 import { getConfig } from '../config.js';
 
 let client = null;

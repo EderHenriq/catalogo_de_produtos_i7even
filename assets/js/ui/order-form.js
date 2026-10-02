@@ -9,9 +9,14 @@ import { openProductPicker } from './product-picker.js';
 import { paymentsHTML, wirePayments } from './payments.js';
 import { openModal, toast, toastError, confirmDialog, withLoading } from './kit.js';
 import { icon } from './icons.js';
-import { esc, money, parseMoney, maskPhone, maskCEP, onlyDigits, todayISO } from '../core/utils.js';
+import {
+  esc, money, parseMoney, moneyInputValue, maskPhone, maskCEP, onlyDigits, todayISO, isMobile,
+} from '../core/utils.js';
 
-/** Soma os totais do jeito que o banco calcula — a tela nunca mente. */
+/** Atributos comuns dos campos de dinheiro: teclado só de números no celular. */
+const MONEY_ATTRS = 'inputmode="numeric" autocomplete="off" placeholder="0,00"';
+
+/** Soma os totais do jeito que o banco calcula - a tela nunca mente. */
 export function computeTotals(order) {
   const subtotal = (order.items || []).reduce((acc, it) => acc + (Number(it.unitPrice) || 0) * (Number(it.qty) || 1), 0);
   const costTotal = (order.items || []).reduce((acc, it) => acc + (Number(it.unitCost) || 0) * (Number(it.qty) || 1), 0);
@@ -19,7 +24,7 @@ export function computeTotals(order) {
   const shipping = Number(order.shippingCost) || 0;
   const shipExp = Number(order.shippingExpense) || 0;
   const total = subtotal - discount + shipping;
-  // Recebido é sempre a soma dos lançamentos — igualzinho ao que o banco faz.
+  // Recebido é sempre a soma dos lançamentos - igualzinho ao que o banco faz.
   const paid = (order.payments || []).reduce((a, p) => a + (Number(p.amount) || 0), 0);
   return {
     subtotal,
@@ -42,7 +47,7 @@ export function openOrderForm({ order = null, onSaved } = {}) {
 
   const modal = openModal({
     title: editing ? `Pedido #${String(draft.code).padStart(4, '0')}` : 'Novo pedido',
-    subtitle: editing ? 'Alterações são salvas no fim da tela' : 'Preencha o essencial — o resto dá para completar depois',
+    subtitle: editing ? 'Alterações são salvas no fim da tela' : 'Preencha o essencial - o resto dá para completar depois',
     size: 'xl',
     body: bodyHTML(draft),
     footer: `
@@ -121,7 +126,7 @@ export function openOrderForm({ order = null, onSaved } = {}) {
       <div class="totals-row"><span class="muted">Produtos (${draft.items.length})</span>
         <span class="num money-sensitive">${esc(money(t.subtotal))}</span></div>
       ${t.discount ? `<div class="totals-row"><span class="muted">Desconto</span>
-        <span class="num neg money-sensitive">− ${esc(money(t.discount))}</span></div>` : ''}
+        <span class="num neg money-sensitive">- ${esc(money(t.discount))}</span></div>` : ''}
       ${t.shipping ? `<div class="totals-row"><span class="muted">Frete cobrado</span>
         <span class="num money-sensitive">${esc(money(t.shipping))}</span></div>` : ''}
       <div class="totals-row grand"><span>Total</span>
@@ -171,11 +176,11 @@ export function openOrderForm({ order = null, onSaved } = {}) {
           <div class="field span-4"><label class="label" for="e-qty">Quantidade</label>
             <input class="input" id="e-qty" type="number" min="1" max="999" value="${esc(it.qty)}"></div>
           <div class="field span-4"><label class="label" for="e-price">Valor unitário</label>
-            <div class="money-input"><input class="input" id="e-price" inputmode="decimal"
-              value="${esc(String(it.unitPrice).replace('.', ','))}"></div></div>
+            <div class="money-input"><input class="input" id="e-price" ${MONEY_ATTRS}
+              value="${esc(moneyInputValue(it.unitPrice))}"></div></div>
           <div class="field span-4"><label class="label" for="e-cost">Custo unitário</label>
-            <div class="money-input"><input class="input" id="e-cost" inputmode="decimal"
-              value="${esc(String(it.unitCost).replace('.', ','))}"></div></div>
+            <div class="money-input"><input class="input" id="e-cost" ${MONEY_ATTRS}
+              value="${esc(moneyInputValue(it.unitCost))}"></div></div>
           <div class="field span-6"><label class="label" for="e-serial">IMEI / série</label>
             <input class="input" id="e-serial" maxlength="40" value="${esc(it.serial)}"></div>
           <div class="field span-6"><label class="label" for="e-warranty">Garantia (dias)</label>
@@ -228,7 +233,7 @@ export function openOrderForm({ order = null, onSaved } = {}) {
     if (f.dataset.field === 'customerName') fillFromCustomer(f.value);
   });
 
-  // Busca de CEP pelos Correios (ViaCEP) — preenche o endereço sozinho.
+  // Busca de CEP pelos Correios (ViaCEP) - preenche o endereço sozinho.
   panel.querySelector('[data-field="shipCep"]')?.addEventListener('blur', async (e) => {
     const cep = onlyDigits(e.target.value);
     if (cep.length !== 8) return;
@@ -308,11 +313,6 @@ export function openOrderForm({ order = null, onSaved } = {}) {
 
 /* ----------------------------------------------------------- template -- */
 
-/** No celular a seção de entrega começa fechada: menos rolagem no cadastro. */
-function ehCelular() {
-  return window.matchMedia('(max-width: 860px)').matches;
-}
-
 function options(list, current) {
   return list.map((o) => {
     const value = typeof o === 'string' ? o : o.key;
@@ -342,18 +342,18 @@ function bodyHTML(d) {
         <div class="field span-3 span-half-mobile">
           <label class="label" for="f-channel">Veio de</label>
           <select class="select" id="f-channel" data-field="channel">
-            <option value="">—</option>${options(CHANNELS, d.channel)}
+            <option value="">-</option>${options(CHANNELS, d.channel)}
           </select>
         </div>
         <div class="field span-6">
           <label class="label" for="f-email">E-mail <span class="dim">(opcional)</span></label>
           <input class="input" id="f-email" data-field="customerEmail" type="email" maxlength="160"
-                 value="${esc(d.customerEmail)}" placeholder="—">
+                 value="${esc(d.customerEmail)}" placeholder="-">
         </div>
         <div class="field span-6">
           <label class="label" for="f-doc">CPF / documento <span class="dim">(opcional)</span></label>
           <input class="input" id="f-doc" data-field="customerDoc" maxlength="30"
-                 value="${esc(d.customerDoc)}" placeholder="—">
+                 value="${esc(d.customerDoc)}" placeholder="-">
         </div>
       </div>
     </section>
@@ -369,17 +369,17 @@ function bodyHTML(d) {
         <div class="field span-3 span-half-mobile">
           <label class="label" for="f-discount">Desconto</label>
           <div class="money-input"><input class="input" id="f-discount" data-field="discount"
-            inputmode="decimal" value="${d.discount ? esc(String(d.discount).replace('.', ',')) : ''}" placeholder="0,00"></div>
+            ${MONEY_ATTRS} value="${esc(moneyInputValue(d.discount))}"></div>
         </div>
         <div class="field span-3 span-half-mobile">
           <label class="label" for="f-ship-cost">Frete cobrado</label>
           <div class="money-input"><input class="input" id="f-ship-cost" data-field="shippingCost"
-            inputmode="decimal" value="${d.shippingCost ? esc(String(d.shippingCost).replace('.', ',')) : ''}" placeholder="0,00"></div>
+            ${MONEY_ATTRS} value="${esc(moneyInputValue(d.shippingCost))}"></div>
         </div>
         <div class="field span-3 span-half-mobile">
           <label class="label" for="f-ship-exp">Frete que você pagou</label>
           <div class="money-input"><input class="input" id="f-ship-exp" data-field="shippingExpense"
-            inputmode="decimal" value="${d.shippingExpense ? esc(String(d.shippingExpense).replace('.', ',')) : ''}" placeholder="0,00"></div>
+            ${MONEY_ATTRS} value="${esc(moneyInputValue(d.shippingExpense))}"></div>
         </div>
         <div class="field span-3 span-half-mobile">
           <label class="label" for="f-installments">Parcelas combinadas</label>
@@ -390,7 +390,7 @@ function bodyHTML(d) {
         <div class="field span-6">
           <label class="label" for="f-pay-method">Forma de pagamento combinada</label>
           <select class="select" id="f-pay-method" data-field="paymentMethod">
-            <option value="">—</option>${options(PAYMENT_METHODS, d.paymentMethod)}
+            <option value="">-</option>${options(PAYMENT_METHODS, d.paymentMethod)}
           </select>
         </div>
 
@@ -401,13 +401,14 @@ function bodyHTML(d) {
     <section class="fieldset">
       <div class="fieldset-title">Pagamentos recebidos</div>
       <p class="hint">
-        Lance cada entrada conforme o cliente paga — sinal, parcelas, complemento.
+        Lance cada entrada conforme o cliente paga - sinal, parcelas, complemento.
         O “falta receber” se ajusta sozinho.
       </p>
       <div data-payments></div>
     </section>
 
-    <details class="fieldset" ${ehCelular() ? '' : 'open'}>
+    <!-- No celular a entrega começa fechada: menos rolagem no cadastro. -->
+    <details class="fieldset" ${isMobile() ? '' : 'open'}>
       <summary class="fieldset-title">
         Entrega
         <span class="summary-chev">${icon('chevronDown')}</span>
@@ -416,13 +417,13 @@ function bodyHTML(d) {
         <div class="field span-5">
           <label class="label" for="f-ship-method">Como vai entregar</label>
           <select class="select" id="f-ship-method" data-field="shippingMethod">
-            <option value="">—</option>${options(SHIPPING_METHODS, d.shippingMethod)}
+            <option value="">-</option>${options(SHIPPING_METHODS, d.shippingMethod)}
           </select>
         </div>
         <div class="field span-4">
           <label class="label" for="f-tracking">Código de rastreio</label>
           <input class="input" id="f-tracking" data-field="trackingCode" maxlength="60"
-                 value="${esc(d.trackingCode)}" placeholder="—">
+                 value="${esc(d.trackingCode)}" placeholder="-">
         </div>
         <div class="field span-3">
           <label class="label" for="f-due">Previsão</label>
@@ -457,7 +458,7 @@ function bodyHTML(d) {
         <div class="field span-2 span-half-mobile">
           <label class="label" for="f-uf">UF</label>
           <select class="select" id="f-uf" data-field="shipUf">
-            <option value="">—</option>${options(UFS, d.shipUf)}
+            <option value="">-</option>${options(UFS, d.shipUf)}
           </select>
         </div>
       </div>

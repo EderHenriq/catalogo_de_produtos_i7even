@@ -7,17 +7,17 @@
  */
 
 import { getClient } from './supabase.js';
-import { uid } from './utils.js';
+import { uid, todayISO } from './utils.js';
 
 const listeners = new Set();
 let orders = [];
 let loaded = false;
 let realtimeChannel = null;
-let inflight = null;       // carga em andamento — cliques repetidos reaproveitam
+let inflight = null;       // carga em andamento - cliques repetidos reaproveitam
 let lastLoadAt = 0;        // quando a última carga completa terminou (ms)
 let realtimeUp = false;    // canal de realtime conectado agora?
 
-/** E-mail de quem está logado — carimbado no pedido na hora de criar. */
+/** E-mail de quem está logado - carimbado no pedido na hora de criar. */
 let currentEmail = '';
 
 export function setCurrentUser(email) {
@@ -113,7 +113,7 @@ function num(v) {
   return Number.isFinite(n) && n >= 0 ? Math.round(n * 100) / 100 : 0;
 }
 
-/** Normaliza um item antes de gravar — evita lixo e campos inesperados no JSONB. */
+/** Normaliza um item antes de gravar - evita lixo e campos inesperados no JSONB. */
 function cleanItem(item) {
   const str = (v, max = 120) => (v ? String(v).slice(0, max) : '');
   return {
@@ -143,7 +143,7 @@ function cleanPayment(p) {
   return {
     id: p.id || uid(),
     // guarda só AAAA-MM-DD; se vier lixo, cai para hoje
-    date: /^\d{4}-\d{2}-\d{2}$/.test(data) ? data : new Date().toISOString().slice(0, 10),
+    date: /^\d{4}-\d{2}-\d{2}$/.test(data) ? data : todayISO(),
     amount: num(p.amount),
     method: str(p.method, 40),
     note: str(p.note, 160),
@@ -153,7 +153,7 @@ function cleanPayment(p) {
 export function newPaymentDraft(partial = {}) {
   return {
     id: uid(),
-    date: new Date().toISOString().slice(0, 10),
+    date: todayISO(),
     amount: 0,
     method: '',
     note: '',
@@ -174,7 +174,7 @@ export function newOrderDraft() {
     items: [],
     payments: [],
     notes: '',
-    orderDate: new Date().toISOString().slice(0, 10),
+    orderDate: todayISO(),
     dueDate: '',
     paymentMethod: 'PIX',
     paymentStatus: 'pendente',
@@ -232,10 +232,31 @@ function emit() {
 
 /* -------------------------------------------------------------- leitura */
 
-export async function load({ force = false } = {}) {
+/**
+ * @param {{force?: boolean, light?: boolean}} [opts]
+ *   light: antes de baixar tudo, pergunta só "id + última alteração" de cada
+ *   pedido. Se bate com o que já está na tela, para por aí. É o que a
+ *   sincronização automática usa: no 4G, a resposta cai de centenas de KB
+ *   (itens, pagamentos, endereços…) para poucos KB.
+ */
+export async function load({ force = false, light = false } = {}) {
   if (loaded && !force) return orders;
   if (inflight) return inflight;
   inflight = (async () => {
+    if (light && loaded) {
+      const { data, error } = await getClient()
+        .from('orders')
+        .select('id,updated_at')
+        .order('created_at', { ascending: false });
+      if (error) throw error;
+      let sig = '';
+      for (const r of data || []) sig += `${r.id}:${r.updated_at}|`;
+      if (sig === signature(orders)) {
+        lastLoadAt = Date.now();
+        return orders;
+      }
+    }
+
     const { data, error } = await getClient()
       .from('orders')
       .select('*')
@@ -388,7 +409,7 @@ export function startRealtime() {
         realtimeUp = true;
         // Voltou depois de cair (celular bloqueado, troca de rede…): o que
         // mudou nesse meio-tempo não chega pelo canal, então busca tudo.
-        if (wasDown && loaded) load({ force: true }).catch(() => {});
+        if (wasDown && loaded) load({ force: true, light: true }).catch(() => {});
       } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || status === 'CLOSED') {
         realtimeUp = false;
         scheduleReconnect();
@@ -414,8 +435,23 @@ export function stopRealtime() {
 
 /* ---------------------------------------------------------------- extras */
 
-/** Clientes distintos, para autocompletar no formulário. */
+let customersCache = null;
+let customersFrom = null;
+
+/**
+ * Clientes distintos, para autocompletar no formulário. Toda escrita troca o
+ * array `orders` por um novo, então enquanto ele for o mesmo a lista já
+ * calculada continua valendo.
+ */
 export function customers() {
+  if (customersFrom !== orders) {
+    customersCache = buildCustomers();
+    customersFrom = orders;
+  }
+  return customersCache;
+}
+
+function buildCustomers() {
   const map = new Map();
   for (const o of orders) {
     const key = o.customerName.trim().toLowerCase();

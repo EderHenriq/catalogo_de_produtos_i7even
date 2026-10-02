@@ -19,7 +19,7 @@
 
 .chart-crosshair { stroke: var(--border-strong); stroke-width: 1; stroke-dasharray: 3 3; }
 
-/* O atributo `hidden` não esconde elementos SVG sozinho — sem esta regra a
+/* O atributo `hidden` não esconde elementos SVG sozinho - sem esta regra a
    linha do cursor ficava desenhada na borda esquerda do gráfico. */
 .chart-hover[hidden] { display: none; }
 .chart-hit { fill: transparent; cursor: crosshair; }

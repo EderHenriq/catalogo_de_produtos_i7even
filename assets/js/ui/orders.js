@@ -9,11 +9,14 @@ import { openModal, toast, toastError, confirmDialog, emptyState, openMenu } fro
 import { icon } from './icons.js';
 import {
   esc, money, formatDate, relativeDate, daysSince, toCSV, downloadFile,
-  startOfDay, startOfMonth, addDays,
+  startOfDay, startOfMonth, addDays, toDate, todayISO, isMobile, onLayoutChange,
 } from '../core/utils.js';
 import { normalize } from '../data/catalog.js';
 
-/** Estado dos filtros — vive fora do render para sobreviver à navegação. */
+/** Quantos pedidos desenhar de cada vez. O resto vem no "Mostrar mais". */
+const PAGE = 60;
+
+/** Estado dos filtros - vive fora do render para sobreviver à navegação. */
 const filters = {
   statuses: new Set(),     // vazio = todos
   period: 'todos',         // hoje | 7d | 30d | mes | todos
@@ -44,6 +47,25 @@ function periodStart(key) {
   return null;
 }
 
+/**
+ * Texto de busca de cada pedido, montado uma vez só. O pedido salvo vira um
+ * objeto novo no store, então a entrada antiga some sozinha do WeakMap.
+ */
+const haystacks = new WeakMap();
+
+function haystackOf(o) {
+  let h = haystacks.get(o);
+  if (h === undefined) {
+    h = normalize([
+      o.customerName, o.customerPhone, o.customerEmail, o.trackingCode, o.notes,
+      String(o.code).padStart(4, '0'),
+      ...o.items.map((it) => [it.productName, it.variant, it.color, it.serial].join(' ')),
+    ].join(' '));
+    haystacks.set(o, h);
+  }
+  return h;
+}
+
 export function filterOrders(list, { term = searchTerm } = {}) {
   const from = periodStart(filters.period);
   const q = normalize(term);
@@ -53,15 +75,9 @@ export function filterOrders(list, { term = searchTerm } = {}) {
     if (filters.onlyOpen && !STATUS_MAP[o.status]?.open) return false;
     if (filters.onlyUnpaid && o.paymentStatus === 'pago') return false;
     if (filters.channel && o.channel !== filters.channel) return false;
-    if (from && new Date(o.orderDate || o.createdAt) < from) return false;
+    if (from && toDate(o.orderDate || o.createdAt) < from) return false;
     if (!q) return true;
-
-    const haystack = normalize([
-      o.customerName, o.customerPhone, o.customerEmail, o.trackingCode, o.notes,
-      String(o.code).padStart(4, '0'),
-      ...o.items.map((it) => [it.productName, it.variant, it.color, it.serial].join(' ')),
-    ].join(' '));
-    return haystack.includes(q);
+    return haystackOf(o).includes(q);
   });
 }
 
@@ -72,7 +88,7 @@ function sortOrders(list) {
     let x = a[key];
     let y = b[key];
     if (key === 'customerName') return mult * String(x).localeCompare(String(y), 'pt-BR');
-    if (key === 'createdAt' || key === 'orderDate') { x = new Date(x); y = new Date(y); }
+    if (key === 'createdAt' || key === 'orderDate') { x = toDate(x); y = toDate(y); }
     return mult * ((x > y) - (x < y));
   });
 }
@@ -144,7 +160,7 @@ export function mount(host, ctx) {
       </div>`;
   }
 
-  /** Folha de filtros do celular — os mesmos controles, com espaço para o dedo. */
+  /** Folha de filtros do celular - os mesmos controles, com espaço para o dedo. */
   function openFilterSheet() {
     const sheet = openModal({
       title: 'Filtros',
@@ -171,7 +187,20 @@ export function mount(host, ctx) {
     return sortOrders(filterOrders(Store.all()));
   }
 
+  // Paginação: volta para a primeira página sempre que filtro, busca ou
+  // ordenação mudam.
+  let shown = PAGE;
+  let lastQuery = '';
+
+  function queryKey() {
+    return JSON.stringify([[...filters.statuses], filters.period, filters.channel,
+      filters.onlyOpen, filters.onlyUnpaid, filters.sort, searchTerm]);
+  }
+
   function renderList() {
+    const key = queryKey();
+    if (key !== lastQuery) { lastQuery = key; shown = PAGE; }
+
     const list = currentList();
     const total = list.reduce((acc, o) => acc + (o.status === 'cancelado' ? 0 : o.total), 0);
 
@@ -195,12 +224,29 @@ export function mount(host, ctx) {
       return;
     }
 
-    $list.innerHTML = `
+    // Só o layout da tela atual vai para o DOM: antes a tabela (escondida no
+    // celular) e os cartões (escondidos no desktop) eram montados juntos.
+    const page = list.slice(0, shown);
+    const rest = list.length - page.length;
+    const more = rest > 0
+      ? `<button class="btn btn-block" data-more style="margin-top:12px">
+           Mostrar mais ${Math.min(rest, PAGE)} de ${rest}</button>`
+      : '';
+
+    const head = `
       <div class="row-between" style="margin-bottom:12px">
         <span class="small muted">${list.length} ${list.length === 1 ? 'pedido' : 'pedidos'}</span>
         <span class="small muted">Soma: <b class="mono money-sensitive">${esc(money(total))}</b></span>
-      </div>
-      <div class="table-wrap hide-mobile">
+      </div>`;
+
+    if (isMobile()) {
+      $list.innerHTML = `${head}<div class="order-cards">${page.map(cardHTML).join('')}</div>${more}`;
+      return;
+    }
+
+    $list.innerHTML = `
+      ${head}
+      <div class="table-wrap">
         <table class="data">
           <thead>
             <tr>
@@ -215,10 +261,10 @@ export function mount(host, ctx) {
               <th class="col-actions"></th>
             </tr>
           </thead>
-          <tbody>${list.map(rowHTML).join('')}</tbody>
+          <tbody>${page.map(rowHTML).join('')}</tbody>
         </table>
       </div>
-      <div class="order-cards only-mobile">${list.map(cardHTML).join('')}</div>`;
+      ${more}`;
   }
 
   function th(key, label, align = '') {
@@ -290,7 +336,7 @@ export function mount(host, ctx) {
   }
 
   function itemSummary(o) {
-    if (!o.items.length) return '— sem itens —';
+    if (!o.items.length) return '- sem itens -';
     const first = o.items[0];
     const label = [first.productName, first.variant, first.color].filter(Boolean).join(' · ');
     return o.items.length > 1 ? `${label} +${o.items.length - 1}` : label;
@@ -321,7 +367,7 @@ export function mount(host, ctx) {
   /**
    * Um único manipulador serve a barra (desktop) e a folha (celular).
    * Quando o clique veio da folha, atualizamos os botões no lugar em vez de
-   * redesenhar tudo — senão a folha se apagaria embaixo do dedo.
+   * redesenhar tudo - senão a folha se apagaria embaixo do dedo.
    */
   function onFilterClick(e) {
     const naFolha = !$filters.contains(e.target);
@@ -407,6 +453,7 @@ export function mount(host, ctx) {
 
   $list.addEventListener('click', async (e) => {
     if (e.target.closest('[data-new]')) { openOrderForm({ onSaved: renderAll }); return; }
+    if (e.target.closest('[data-more]')) { shown += PAGE; renderList(); return; }
     if (e.target.closest('[data-clear-filters]')) {
       filters.statuses.clear();
       filters.period = 'todos';
@@ -462,7 +509,7 @@ export function mount(host, ctx) {
           onSelect: async () => {
             const ok = await confirmDialog({
               title: 'Excluir pedido?',
-              message: `#${String(o.code).padStart(4, '0')} — ${o.customerName}`,
+              message: `#${String(o.code).padStart(4, '0')} - ${o.customerName}`,
               confirmText: 'Excluir', danger: true,
             });
             if (!ok) return;
@@ -524,6 +571,7 @@ export function mount(host, ctx) {
   }
 
   const unsubscribe = Store.subscribe(() => renderList());
+  const offLayout = onLayoutChange(() => renderList());
 
   renderAll();
 
@@ -532,6 +580,7 @@ export function mount(host, ctx) {
     refresh: renderAll,
     destroy() {
       unsubscribe();
+      offLayout();
       selection.clear();
       document.documentElement.dataset.bulk = 'off';
     },
@@ -567,7 +616,7 @@ export function exportCSV(list) {
     Observacoes: (o.notes || '').replace(/\s+/g, ' '),
   }));
   downloadFile(
-    `pedidos-i7even-${new Date().toISOString().slice(0, 10)}.csv`,
+    `pedidos-i7even-${todayISO()}.csv`,
     toCSV(rows),
     'text/csv;charset=utf-8',
   );

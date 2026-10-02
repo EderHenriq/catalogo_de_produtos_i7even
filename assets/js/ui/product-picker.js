@@ -1,16 +1,16 @@
 /**
- * Seletor de produtos — a tela que torna o cadastro rápido.
+ * Seletor de produtos - a tela que torna o cadastro rápido.
  *
  * Fluxo: escolhe a categoria → marca um ou vários modelos (checkbox) →
  * cada marcado abre uma linha de configuração (capacidade, cor, condição,
  * quantidade, valor) → adiciona tudo de uma vez ao pedido.
  */
 
-import { CATALOG, CONDITIONS, ORIGINS, searchProducts } from '../data/catalog.js';
+import { CATALOG, CONDITIONS, ORIGINS, searchProducts, findProduct } from '../data/catalog.js';
 import { newItemDraft } from '../core/store.js';
 import { openModal, toast } from './kit.js';
 import { icon } from './icons.js';
-import { esc, parseMoney, debounce, uid } from '../core/utils.js';
+import { esc, parseMoney, moneyInputValue, debounce, uid } from '../core/utils.js';
 
 /**
  * @param {{onAdd: (items: object[]) => void, defaultCategory?: string}} opts
@@ -79,7 +79,7 @@ export function openProductPicker({ onAdd, defaultCategory = 'iphone' }) {
 
   function renderGrid() {
     // Lançados primeiro (os "a confirmar" vão para o fim) e, dentro disso,
-    // do mais novo para o mais antigo — é a ordem em que a loja mais vende.
+    // do mais novo para o mais antigo - é a ordem em que a loja mais vende.
     const list = searchProducts(term, term ? null : activeCat)
       .sort((a, b) => Number(!!a.todo) - Number(!!b.todo)
         || b.year - a.year
@@ -99,7 +99,7 @@ export function openProductPicker({ onAdd, defaultCategory = 'iphone' }) {
           <button type="button" class="pick" data-product="${esc(p.id)}" aria-pressed="${on}">
             <span class="pick-check" aria-hidden="true">${icon('check')}</span>
             <span class="pick-name">${esc(p.name)}${p.todo ? ' <span class="dim">·  a confirmar</span>' : ''}</span>
-            <span class="pick-meta">${esc(p.category.label)} · ${esc(meta || '—')}</span>
+            <span class="pick-meta">${esc(p.category.label)} · ${esc(meta || '-')}</span>
           </button>`;
       })
       .join('');
@@ -111,7 +111,8 @@ export function openProductPicker({ onAdd, defaultCategory = 'iphone' }) {
     const id = btn.dataset.product;
     if (selected.has(id)) selected.delete(id);
     else selected.set(id, buildItem(id));
-    renderGrid();
+    // Só o botão tocado muda: redesenhar a grade inteira travava no celular.
+    btn.setAttribute('aria-pressed', String(selected.has(id)));
     renderTray();
   });
 
@@ -124,8 +125,7 @@ export function openProductPicker({ onAdd, defaultCategory = 'iphone' }) {
   /* ------------------------------------------------------------ catálogo */
 
   function buildItem(productId) {
-    const list = searchProducts('', null);
-    const p = list.find((x) => x.id === productId);
+    const p = findProduct(productId);
     if (!p) return newItemDraft();
     return newItemDraft({
       categoryId: p.categoryId,
@@ -224,28 +224,28 @@ export function openProductPicker({ onAdd, defaultCategory = 'iphone' }) {
           <div class="field span-4 span-half-mobile">
             <label class="label" for="price-${esc(key)}">Valor de venda</label>
             <div class="money-input">
-              <input class="input" id="price-${esc(key)}" inputmode="decimal" data-f="unitPrice"
-                     value="${it.unitPrice ? esc(it.unitPrice.toFixed(2).replace('.', ',')) : ''}" placeholder="0,00">
+              <input class="input" id="price-${esc(key)}" inputmode="numeric" autocomplete="off" data-f="unitPrice"
+                     value="${esc(moneyInputValue(it.unitPrice))}" placeholder="0,00">
             </div>
           </div>
           <div class="field span-5">
-            <label class="label" for="cost-${esc(key)}">Custo <span class="dim">(opcional — calcula o lucro)</span></label>
+            <label class="label" for="cost-${esc(key)}">Custo <span class="dim">(opcional - calcula o lucro)</span></label>
             <div class="money-input">
-              <input class="input" id="cost-${esc(key)}" inputmode="decimal" data-f="unitCost"
-                     value="${it.unitCost ? esc(it.unitCost.toFixed(2).replace('.', ',')) : ''}" placeholder="0,00">
+              <input class="input" id="cost-${esc(key)}" inputmode="numeric" autocomplete="off" data-f="unitCost"
+                     value="${esc(moneyInputValue(it.unitCost))}" placeholder="0,00">
             </div>
           </div>
           <div class="field span-6">
             <label class="label" for="origin-${esc(key)}">Origem</label>
             <select class="select" id="origin-${esc(key)}" data-f="origin">
-              <option value="">—</option>
+              <option value="">-</option>
               ${ORIGINS.map((op) => `<option ${op === it.origin ? 'selected' : ''}>${esc(op)}</option>`).join('')}
             </select>
           </div>
           <div class="field span-6">
             <label class="label" for="serial-${esc(key)}">IMEI / série <span class="dim">(opcional)</span></label>
             <input class="input" id="serial-${esc(key)}" data-f="serial" value="${esc(it.serial)}"
-                   maxlength="40" placeholder="—">
+                   maxlength="40" placeholder="-">
           </div>
         </div>
       </div>`;

@@ -31,7 +31,7 @@ export function renderSetup(host, { onDone }) {
       <div class="alert" data-kind="info">
         ${icon('info')}
         <div>Cole os dois dados do seu projeto Supabase: <b>Project Settings → API</b>.
-        Use a chave <b>anon / public</b> — nunca a <i>service_role</i>.</div>
+        Use a chave <b>anon / public</b> - nunca a <i>service_role</i>.</div>
       </div>
       <div class="field">
         <label class="label" for="url">URL do projeto</label>

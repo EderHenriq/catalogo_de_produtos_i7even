@@ -1,4 +1,4 @@
-#  Netlify — i7even Store
+#  Netlify - i7even Store
 #  Site estático puro: não há build, o Netlify só publica os arquivos da raiz.
 
 [build]

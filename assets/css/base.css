@@ -182,7 +182,7 @@ input[type='date']::-webkit-calendar-picker-indicator { cursor: pointer; opacity
 .right { text-align: right; }
 .center { text-align: center; }
 /*
- * "Números da operação sempre em mono" — regra da identidade da i7even.
+ * "Números da operação sempre em mono" - regra da identidade da i7even.
  * A monoespaçada é o que faz o dado parecer laudo técnico em vez de anúncio.
  */
 .mono { font-family: var(--font-num); font-variant-numeric: tabular-nums; }

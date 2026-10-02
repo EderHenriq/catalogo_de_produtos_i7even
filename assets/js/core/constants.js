@@ -2,7 +2,7 @@
 
 /**
  * Pipeline do pedido. A ordem aqui é a ordem do funil no dashboard.
- * `key` é o valor gravado no banco — não renomear sem migrar os dados.
+ * `key` é o valor gravado no banco - não renomear sem migrar os dados.
  */
 export const STATUSES = [
   { key: 'novo',         label: 'Novo',            short: 'Novo',      tone: 'gray',   open: true },
@@ -21,7 +21,7 @@ export function statusLabel(key) {
   return STATUS_MAP[key]?.label ?? key;
 }
 
-/** Próximo passo natural do funil — alimenta o botão "avançar" da lista. */
+/** Próximo passo natural do funil - alimenta o botão "avançar" da lista. */
 export const NEXT_STATUS = {
   novo: 'aguardando',
   aguardando: 'pago',

@@ -1,8 +1,8 @@
 /**
- * Catálogo de produtos — i7even Store
+ * Catálogo de produtos - i7even Store
  *
  * Estrutura de cada produto:
- *   id       slug único (usado como chave em pedidos salvos — NÃO renomear depois)
+ *   id       slug único (usado como chave em pedidos salvos - NÃO renomear depois)
  *   name     nome comercial exibido
  *   year     ano de lançamento (usado para ordenar)
  *   storages opções de armazenamento / capacidade
@@ -117,7 +117,7 @@ const IPHONES = [
     storages: ['256GB', '512GB', '1TB', '2TB'],
     colors: ['Laranja-cósmico', 'Azul-profundo', 'Prateado'] },
 
-  // Linha 18 — confira cores/capacidades no keynote e ajuste aqui.
+  // Linha 18 - confira cores/capacidades no keynote e ajuste aqui.
   { id: 'iphone-18', name: 'iPhone 18', year: 2026, todo: true,
     storages: ['256GB', '512GB', '1TB'],
     colors: ['Preto', 'Branco', 'Outra cor'] },
@@ -283,7 +283,7 @@ const CONSOLES = [
   { id: 'switch-oled', name: 'Nintendo Switch OLED', year: 2021, storages: ['64GB'], colors: ['Branco', 'Neon', 'Edição especial'] },
   { id: 'switch-lite', name: 'Nintendo Switch Lite', year: 2019, storages: ['32GB'], colors: ['Turquesa', 'Cinza', 'Coral', 'Amarelo', 'Azul'] },
   { id: 'switch-2', name: 'Nintendo Switch 2', year: 2025, storages: ['256GB'], colors: ['Padrão'] },
-  { id: 'game-avulso', name: 'Jogo / mídia física', year: 2020, storages: ['PS5', 'PS4', 'Xbox', 'Switch', 'Switch 2'], colors: ['—'] },
+  { id: 'game-avulso', name: 'Jogo / mídia física', year: 2020, storages: ['PS5', 'PS4', 'Xbox', 'Switch', 'Switch 2'], colors: ['-'] },
 ];
 
 /* ---------------------------------------------------------------- Perfumes */
@@ -323,7 +323,7 @@ const ACESSORIOS = [
   { id: 'carregador', name: 'Carregador / cabo Apple', year: 2021, storages: ['20W', '30W', '35W', '70W', '96W', 'Cabo USB-C'], colors: ['Branco'] },
   { id: 'magsafe', name: 'Carregador MagSafe', year: 2020, storages: ['MagSafe', 'MagSafe Duo', 'Battery Pack'], colors: ['Branco', 'Preto'] },
   { id: 'capa', name: 'Capa / Case', year: 2021, storages: ['Silicone', 'Transparente', 'Couro', 'FineWoven', 'Outra'], colors: ['Diversas'] },
-  { id: 'pelicula', name: 'Película', year: 2021, storages: ['Vidro 3D', 'Privacidade', 'Hidrogel', 'Câmera'], colors: ['—'] },
+  { id: 'pelicula', name: 'Película', year: 2021, storages: ['Vidro 3D', 'Privacidade', 'Hidrogel', 'Câmera'], colors: ['-'] },
   { id: 'airtag', name: 'AirTag', year: 2021, storages: ['Unidade', 'Pack com 4'], colors: ['Branco'] },
 ];
 

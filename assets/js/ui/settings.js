@@ -9,14 +9,17 @@ import { exportCSV } from './orders.js';
 import { exportCustomers } from './customers.js';
 import { exportItems } from './reports.js';
 import { icon } from './icons.js';
-import { esc, money, downloadFile, formatDateTime } from '../core/utils.js';
+import { esc, money, downloadFile, formatDateTime, todayISO } from '../core/utils.js';
 
 export function mount(host) {
   host.innerHTML = '<div class="view" data-root></div>';
   const root = host.querySelector('[data-root]');
+  // Busca o usuário uma vez por visita à tela. Antes cada toque (ex.: trocar
+  // o tema) esperava uma ida ao servidor antes de redesenhar.
+  const userReq = getUser().catch(() => null);
 
   async function render() {
-    const user = await getUser().catch(() => null);
+    const user = await userReq;
     const orders = Store.all();
     const revenue = orders.filter((o) => o.status !== 'cancelado').reduce((a, o) => a + o.total, 0);
 
@@ -56,8 +59,8 @@ export function mount(host) {
           <div class="row gap-3">
             <span class="avatar">${icon('lock')}</span>
             <div class="grow truncate">
-              <div class="strong truncate">${esc(user?.email || '—')}</div>
-              <div class="small dim">Entrou em ${esc(user?.last_sign_in_at ? formatDateTime(user.last_sign_in_at) : '—')}</div>
+              <div class="strong truncate">${esc(user?.email || '-')}</div>
+              <div class="small dim">Entrou em ${esc(user?.last_sign_in_at ? formatDateTime(user.last_sign_in_at) : '-')}</div>
             </div>
           </div>
           <div class="row gap-2 wrap">
@@ -92,7 +95,7 @@ export function mount(host) {
           <div>
             <div class="strong">Backup completo</div>
             <div class="small dim">O backup JSON guarda tudo, inclusive os itens de cada pedido. Guarde uma cópia
-              fora do computador de vez em quando — é o seu seguro contra qualquer imprevisto.</div>
+              fora do computador de vez em quando - é o seu seguro contra qualquer imprevisto.</div>
           </div>
           <div class="row gap-2 wrap">
             <button class="btn" data-backup>${icon('download')} Baixar backup (JSON)</button>
@@ -177,7 +180,7 @@ export function mount(host) {
       orders: Store.all(),
     };
     downloadFile(
-      `backup-i7even-${new Date().toISOString().slice(0, 10)}.json`,
+      `backup-i7even-${todayISO()}.json`,
       JSON.stringify(payload, null, 2),
       'application/json',
     );

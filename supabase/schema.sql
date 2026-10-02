@@ -1,5 +1,5 @@
 -- =====================================================================
---  i7even Store — esquema do banco (Supabase / PostgreSQL)
+--  i7even Store - esquema do banco (Supabase / PostgreSQL)
 --  Cole este arquivo inteiro no SQL Editor do Supabase e rode uma vez.
 --  Pode rodar de novo sem medo: tudo é idempotente.
 -- =====================================================================
@@ -67,7 +67,7 @@ alter table public.orders add column if not exists created_by_email text;
 /*
  * Histórico de pagamentos: sinal, parcelas, complementos.
  * Cada entrada é {id, date, amount, method, note}. O `paid_amount` e o
- * `payment_status` da tabela passam a ser DERIVADOS desta lista pelo trigger —
+ * `payment_status` da tabela passam a ser DERIVADOS desta lista pelo trigger -
  * ninguém digita "já recebido" na mão, então os dois nunca saem de sincronia.
  */
 alter table public.orders add column if not exists payments jsonb not null default '[]'::jsonb;
@@ -210,7 +210,7 @@ grant select on public.store_members to authenticated;
 
 -- ------------------------------------------------- Row Level Security -----
 -- Sem isto, a chave anon leria tudo. COM isto, só quem está em
--- store_members enxerga alguma linha — e enxerga todas, porque a base
+-- store_members enxerga alguma linha - e enxerga todas, porque a base
 -- da loja é compartilhada entre os dois donos.
 
 alter table public.orders enable row level security;
@@ -261,7 +261,7 @@ join (values
 on conflict (user_id) do update set nome = excluded.nome;
 
 -- ------------------------------------------------------------------ view --
--- Um registro por item vendido — facilita relatório "qual modelo mais sai".
+-- Um registro por item vendido - facilita relatório "qual modelo mais sai".
 
 create or replace view public.order_items_view
 with (security_invoker = true) as
@@ -287,7 +287,7 @@ cross join lateral jsonb_array_elements(o.items) as item;
 
 grant select on public.order_items_view to authenticated;
 
--- Um registro por pagamento recebido — responde "quanto entrou no caixa no mês",
+-- Um registro por pagamento recebido - responde "quanto entrou no caixa no mês",
 -- que é diferente de "quanto foi faturado no mês" quando há parcelamento.
 
 create or replace view public.order_payments_view
@@ -326,13 +326,13 @@ grant select on public.order_payments_view to authenticated;
 --   4. Authentication → Sign In / Providers → Email:
 --      DESLIGUE "Allow new users to sign up".
 --
--- Conferência rápida — deve devolver as duas linhas, Eder e Julie:
+-- Conferência rápida - deve devolver as duas linhas, Eder e Julie:
 --   select m.nome, u.email
 --   from public.store_members m join auth.users u on u.id = m.user_id;
 
 -- ------------------------------------------------------------- realtime --
 -- Faz o Supabase avisar os aparelhos abertos a cada pedido criado, editado
--- ou excluído — é o que atualiza a tela do outro sem precisar recarregar.
+-- ou excluído - é o que atualiza a tela do outro sem precisar recarregar.
 -- Sem isto, o canal conecta mas nunca recebe nada.
 
 do $$

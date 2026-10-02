@@ -27,23 +27,53 @@ export function parseMoney(input) {
   return Number.isFinite(n) ? n : 0;
 }
 
+const DECIMAL = new Intl.NumberFormat('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+/** Valor para preencher um campo de dinheiro: 1500 → "1.500,00"; zero → vazio. */
+export function moneyInputValue(value) {
+  const n = Number(value) || 0;
+  return n ? DECIMAL.format(n) : '';
+}
+
+/**
+ * Máscara de dinheiro estilo app de banco: os dígitos entram pela direita e a
+ * vírgula fica sempre nas duas últimas casas. "150000" → "1.500,00".
+ */
+export function maskMoney(value = '') {
+  const digits = String(value).replace(/\D/g, '').replace(/^0+/, '').slice(0, 11);
+  return digits ? DECIMAL.format(Number(digits) / 100) : '';
+}
+
 /* ------------------------------------------------------------------ Datas */
 
-export function todayISO() {
-  return new Date().toISOString().slice(0, 10);
+/** Data de hoje (AAAA-MM-DD) no fuso do aparelho, não em UTC. */
+export function todayISO(d = new Date()) {
+  const p = (n) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
+}
+
+/**
+ * Converte para Date. "AAAA-MM-DD" vira meia-noite LOCAL: o `new Date()` puro
+ * lê como UTC e, no Brasil, o pedido de hoje aparecia como sendo de ontem.
+ */
+export function toDate(value) {
+  if (value instanceof Date) return value;
+  const s = String(value ?? '');
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(s);
+  return m ? new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3])) : new Date(s);
 }
 
 export function formatDate(value, opts = {}) {
-  if (!value) return '—';
-  const d = new Date(value);
-  if (Number.isNaN(d.getTime())) return '—';
+  if (!value) return '-';
+  const d = toDate(value);
+  if (Number.isNaN(d.getTime())) return '-';
   return d.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', ...opts });
 }
 
 export function formatDateTime(value) {
-  if (!value) return '—';
-  const d = new Date(value);
-  if (Number.isNaN(d.getTime())) return '—';
+  if (!value) return '-';
+  const d = toDate(value);
+  if (Number.isNaN(d.getTime())) return '-';
   return d.toLocaleString('pt-BR', {
     day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit',
   });
@@ -51,9 +81,9 @@ export function formatDateTime(value) {
 
 /** "hoje", "ontem", "há 3 dias", "12/03/2025". */
 export function relativeDate(value) {
-  if (!value) return '—';
-  const d = new Date(value);
-  if (Number.isNaN(d.getTime())) return '—';
+  if (!value) return '-';
+  const d = toDate(value);
+  if (Number.isNaN(d.getTime())) return '-';
   const days = Math.floor((startOfDay(new Date()) - startOfDay(d)) / 86400000);
   if (days === 0) return 'hoje';
   if (days === 1) return 'ontem';
@@ -83,7 +113,22 @@ export function addDays(d, n) {
 /** Nº de dias corridos desde a data (usado para destacar pedidos parados). */
 export function daysSince(value) {
   if (!value) return 0;
-  return Math.floor((startOfDay(new Date()) - startOfDay(new Date(value))) / 86400000);
+  return Math.floor((startOfDay(new Date()) - startOfDay(toDate(value))) / 86400000);
+}
+
+/* ---------------------------------------------------------------- Tela */
+
+const MOBILE_MQ = window.matchMedia('(max-width: 860px)');
+
+/** Mesmo corte do CSS (mobile.css): abaixo disso o layout é o do celular. */
+export function isMobile() {
+  return MOBILE_MQ.matches;
+}
+
+/** Avisa quando o layout troca entre celular e desktop. Devolve o "desligar". */
+export function onLayoutChange(fn) {
+  MOBILE_MQ.addEventListener('change', fn);
+  return () => MOBILE_MQ.removeEventListener('change', fn);
 }
 
 /* -------------------------------------------------------- Template seguro */

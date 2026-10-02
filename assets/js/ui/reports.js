@@ -8,7 +8,10 @@ import { toast, emptyState } from './kit.js';
 import { icon } from './icons.js';
 import {
   esc, money, startOfMonth, addDays, startOfDay, toCSV, downloadFile, formatDate,
+  toDate, todayISO, isMobile, onLayoutChange,
 } from '../core/utils.js';
+
+const orderDay = (o) => toDate(o.orderDate || o.createdAt);
 
 const PERIODS = {
   mes: 'Este mês',
@@ -36,7 +39,7 @@ function rangeFor(key) {
   return [new Date(2000, 0, 1), addDays(startOfDay(now), 1)];
 }
 
-/** Explode os pedidos em linhas de item — a base de todo relatório de produto. */
+/** Explode os pedidos em linhas de item - a base de todo relatório de produto. */
 function itemRows(orders) {
   const rows = [];
   for (const o of orders) {
@@ -86,7 +89,7 @@ export function mount(host) {
     const [from, to] = rangeFor(period);
     const all = Store.all();
     const inPeriod = all.filter((o) => {
-      const d = new Date(o.orderDate || o.createdAt);
+      const d = orderDay(o);
       return d >= from && d < to && o.status !== 'cancelado';
     });
 
@@ -100,13 +103,13 @@ export function mount(host) {
     const margin = revenue ? (profit / revenue) * 100 : 0;
 
     /*
-     * Dinheiro que ENTROU no período, olhando a data de cada pagamento — não a
+     * Dinheiro que ENTROU no período, olhando a data de cada pagamento - não a
      * data do pedido. Com parcelamento os dois números se descolam: uma venda
      * de setembro pode pingar no caixa até dezembro.
      */
     const caixa = all.reduce((acc, o) => {
       for (const p of o.payments || []) {
-        const d = new Date(`${p.date}T12:00:00`);
+        const d = toDate(p.date);
         if (d >= from && d < to) {
           acc.valor += Number(p.amount) || 0;
           acc.qtd += 1;
@@ -139,6 +142,7 @@ export function mount(host) {
     }
 
     const daily = buildDaily(inPeriod, from, to);
+    const detail = aggregateDetail(rows);
 
     root.innerHTML = `
       ${header}
@@ -194,14 +198,15 @@ export function mount(host) {
       <div class="card">
         <div class="card-head"><h3>Detalhe por produto</h3></div>
 
-        <div class="table-wrap desktop-only" style="border:0;border-radius:0">
+        ${isMobile() ? stackHTML(detail) : `
+        <div class="table-wrap" style="border:0;border-radius:0">
           <table class="data">
             <thead>
               <tr><th>Produto</th><th>Categoria</th><th class="right">Qtd.</th>
                   <th class="right">Faturamento</th><th class="right">Custo</th><th class="right">Lucro</th></tr>
             </thead>
             <tbody>
-              ${aggregateDetail(rows).map((r) => `
+              ${detail.map((r) => `
                 <tr>
                   <td class="cell-primary">${esc(r.label)}</td>
                   <td class="small muted">${esc(r.categoryLabel)}</td>
@@ -212,20 +217,7 @@ export function mount(host) {
                 </tr>`).join('')}
             </tbody>
           </table>
-        </div>
-
-        <!-- No celular a mesma tabela vira lista: nada de rolar de lado. -->
-        <div class="stack-list">
-          ${aggregateDetail(rows).map((r) => `
-            <div class="stack-row">
-              <span class="stack-title">${esc(r.label)}</span>
-              <span class="stack-value money-sensitive">${esc(money(r.value))}</span>
-              <span class="stack-meta">
-                ${esc(r.categoryLabel)} · ${esc(r.qty)} un. ·
-                lucro <b class="${r.profit >= 0 ? 'pos' : 'neg'} money-sensitive">${esc(money(r.profit))}</b>
-              </span>
-            </div>`).join('')}
-        </div>
+        </div>`}
       </div>`;
 
     const chartHost = root.querySelector('[data-chart]');
@@ -237,38 +229,50 @@ export function mount(host) {
     });
   }
 
+  /** No celular a tabela de detalhe vira lista: nada de rolar de lado. */
+  function stackHTML(detail) {
+    return `
+        <div class="stack-list">
+          ${detail.map((r) => `
+            <div class="stack-row">
+              <span class="stack-title">${esc(r.label)}</span>
+              <span class="stack-value money-sensitive">${esc(money(r.value))}</span>
+              <span class="stack-meta">
+                ${esc(r.categoryLabel)} · ${esc(r.qty)} un. ·
+                lucro <b class="${r.profit >= 0 ? 'pos' : 'neg'} money-sensitive">${esc(money(r.profit))}</b>
+              </span>
+            </div>`).join('')}
+        </div>`;
+  }
+
+  /** Série por dia (ou por mês, em períodos longos), numa passada só. */
   function buildDaily(orders, from, to) {
     const days = Math.min(Math.ceil((to - from) / 86400000), 370);
     const useMonths = days > 62;
     const labels = [];
-    const revenue = [];
-    const profit = [];
+    let bucketOf;
 
     if (useMonths) {
       const cursor = new Date(from.getFullYear(), from.getMonth(), 1);
       while (cursor < to) {
-        const next = new Date(cursor); next.setMonth(next.getMonth() + 1);
-        const slice = orders.filter((o) => {
-          const d = new Date(o.orderDate || o.createdAt);
-          return d >= cursor && d < next;
-        });
         labels.push(cursor.toLocaleDateString('pt-BR', { month: 'short' }).replace('.', ''));
-        revenue.push(slice.reduce((a, o) => a + o.total, 0));
-        profit.push(slice.reduce((a, o) => a + o.profit, 0));
         cursor.setMonth(cursor.getMonth() + 1);
       }
+      bucketOf = (d) => (d.getFullYear() - from.getFullYear()) * 12 + d.getMonth() - from.getMonth();
     } else {
       for (let i = 0; i < days; i++) {
-        const day = addDays(from, i);
-        const next = addDays(day, 1);
-        const slice = orders.filter((o) => {
-          const d = new Date(o.orderDate || o.createdAt);
-          return d >= day && d < next;
-        });
-        labels.push(day.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' }));
-        revenue.push(slice.reduce((a, o) => a + o.total, 0));
-        profit.push(slice.reduce((a, o) => a + o.profit, 0));
+        labels.push(addDays(from, i).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' }));
       }
+      bucketOf = (d) => Math.floor((startOfDay(d) - from) / 86400000 + 0.5);
+    }
+
+    const revenue = new Array(labels.length).fill(0);
+    const profit = new Array(labels.length).fill(0);
+    for (const o of orders) {
+      const i = bucketOf(orderDay(o));
+      if (i < 0 || i >= labels.length) continue;
+      revenue[i] += o.total;
+      profit[i] += o.profit;
     }
 
     return {
@@ -321,13 +325,14 @@ export function mount(host) {
   });
 
   const unsubscribe = Store.subscribe(() => render());
+  const offLayout = onLayoutChange(() => render());
   render();
 
-  return { refresh: render, destroy() { unsubscribe(); chart?.destroy(); } };
+  return { refresh: render, destroy() { unsubscribe(); offLayout(); chart?.destroy(); } };
 }
 
 /* ---------------------------------------------------------- exportação */
-/* Chamada só pela tela de Ajustes — é lá que ficam todas as exportações. */
+/* Chamada só pela tela de Ajustes - é lá que ficam todas as exportações. */
 
 /** Uma linha por item vendido, de todos os pedidos. */
 export function exportItems(orders = Store.all()) {
@@ -350,7 +355,7 @@ export function exportItems(orders = Store.all()) {
   }));
   if (!rows.length) { toast('Nenhum item para exportar.', { kind: 'warn' }); return; }
   downloadFile(
-    `itens-i7even-${new Date().toISOString().slice(0, 10)}.csv`,
+    `itens-i7even-${todayISO()}.csv`,
     toCSV(rows),
     'text/csv;charset=utf-8',
   );

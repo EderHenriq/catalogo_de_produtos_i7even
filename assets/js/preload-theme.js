@@ -14,5 +14,5 @@ try {
     document.documentElement.setAttribute('data-privacy', 'on');
   }
 } catch (e) {
-  /* navegador com armazenamento bloqueado — segue no tema automático */
+  /* navegador com armazenamento bloqueado - segue no tema automático */
 }

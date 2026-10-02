@@ -9,7 +9,7 @@ import { openOrderForm } from './order-form.js';
 import { emptyState } from './kit.js';
 import { icon } from './icons.js';
 import {
-  esc, money, moneyCompact, relativeDate, daysSince, startOfMonth, addDays, startOfDay,
+  esc, money, moneyCompact, relativeDate, daysSince, startOfMonth, addDays, startOfDay, toDate,
 } from '../core/utils.js';
 
 const TREND_RANGES = {
@@ -30,8 +30,12 @@ function monthWindow(offset = 0) {
   return [start, end];
 }
 
+function orderDay(order) {
+  return toDate(order.orderDate || order.createdAt);
+}
+
 function inRange(order, from, to) {
-  const d = new Date(order.orderDate || order.createdAt);
+  const d = orderDay(order);
   return d >= from && d < to;
 }
 
@@ -46,31 +50,35 @@ function summarize(list) {
   return { count: ok.length, revenue, profit, ticket: ok.length ? revenue / ok.length : 0 };
 }
 
-/** Série temporal de faturamento e lucro. */
+/** Série temporal de faturamento e lucro, numa passada só pelos pedidos. */
 function buildTrend(orders) {
   const cfg = TREND_RANGES[trendRange];
   const labels = [];
-  const revenue = [];
-  const profit = [];
-  const ok = valid(orders);
+  const n = cfg.bucket === 'day' ? cfg.days : cfg.months;
+  const revenue = new Array(n).fill(0);
+  const profit = new Array(n).fill(0);
+  let bucketOf;
 
   if (cfg.bucket === 'day') {
-    for (let i = cfg.days - 1; i >= 0; i--) {
-      const day = startOfDay(addDays(new Date(), -i));
-      const next = addDays(day, 1);
-      const slice = ok.filter((o) => inRange(o, day, next));
-      labels.push(day.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' }));
-      revenue.push(slice.reduce((a, o) => a + o.total, 0));
-      profit.push(slice.reduce((a, o) => a + o.profit, 0));
+    const first = startOfDay(addDays(new Date(), -(n - 1)));
+    for (let i = 0; i < n; i++) {
+      labels.push(addDays(first, i).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' }));
     }
+    bucketOf = (d) => Math.round((startOfDay(d) - first) / 86400000);
   } else {
-    for (let i = cfg.months - 1; i >= 0; i--) {
-      const [from, to] = monthWindow(-i);
-      const slice = ok.filter((o) => inRange(o, from, to));
-      labels.push(from.toLocaleDateString('pt-BR', { month: 'short' }).replace('.', ''));
-      revenue.push(slice.reduce((a, o) => a + o.total, 0));
-      profit.push(slice.reduce((a, o) => a + o.profit, 0));
+    const [first] = monthWindow(-(n - 1));
+    for (let i = 0; i < n; i++) {
+      const m = new Date(first.getFullYear(), first.getMonth() + i, 1);
+      labels.push(m.toLocaleDateString('pt-BR', { month: 'short' }).replace('.', ''));
     }
+    bucketOf = (d) => (d.getFullYear() - first.getFullYear()) * 12 + d.getMonth() - first.getMonth();
+  }
+
+  for (const o of valid(orders)) {
+    const i = bucketOf(orderDay(o));
+    if (i < 0 || i >= n) continue;
+    revenue[i] += o.total;
+    profit[i] += o.profit;
   }
 
   return {
@@ -129,7 +137,7 @@ export function mount(host, ctx) {
       root.innerHTML = emptyState({
         emoji: '👋',
         title: 'Tudo pronto para começar',
-        text: 'Cadastre seu primeiro pedido — os números e gráficos aparecem automaticamente.',
+        text: 'Cadastre seu primeiro pedido - os números e gráficos aparecem automaticamente.',
         action: `<button class="btn btn-primary btn-lg" data-new>${icon('plus')} Criar primeiro pedido</button>`,
       });
       return;
@@ -148,7 +156,9 @@ export function mount(host, ctx) {
       .slice(0, 6);
 
     const trend = buildTrend(orders);
-    const funnelMax = Math.max(1, ...STATUSES.map((s) => orders.filter((o) => o.status === s.key).length));
+    const perStatus = {};
+    for (const o of orders) perStatus[o.status] = (perStatus[o.status] || 0) + 1;
+    const funnelMax = Math.max(1, ...Object.values(perStatus));
 
     root.innerHTML = `
       <div class="grid grid-kpi">
@@ -186,7 +196,7 @@ export function mount(host, ctx) {
           <div class="card-body">
             <div class="funnel">
               ${STATUSES.map((s) => {
-                const n = orders.filter((o) => o.status === s.key).length;
+                const n = perStatus[s.key] || 0;
                 return `
                   <button class="funnel-row" data-goto-status="${esc(s.key)}">
                     <span class="funnel-label small muted truncate">${esc(s.label)}</span>

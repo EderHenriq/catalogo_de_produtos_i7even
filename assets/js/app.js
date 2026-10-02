@@ -9,6 +9,7 @@ import { initTheme, toggleTheme, isDark, isPrivacy, togglePrivacy } from './ui/t
 import { renderSetup, renderLogin, renderBoot } from './ui/gate.js';
 import { icon } from './ui/icons.js';
 import { toast, toastError, closeMenu } from './ui/kit.js';
+import { initInputs } from './ui/inputs.js';
 import { openOrderForm } from './ui/order-form.js';
 import { esc, debounce } from './core/utils.js';
 
@@ -38,6 +39,7 @@ let pendingSearch = null;  // busca a aplicar assim que a próxima tela montar
 /* ==================================================================== */
 
 initTheme();
+initInputs();
 boot();
 
 async function boot() {
@@ -312,7 +314,7 @@ function route(id, params = {}) {
   current = found.module.mount(viewHost, {
     /**
      * Leva para a lista de pedidos já filtrada. A busca fica guardada em
-     * `pendingSearch` porque a troca de hash remonta a tela — aplicá-la aqui
+     * `pendingSearch` porque a troca de hash remonta a tela - aplicá-la aqui
      * atingiria a tela antiga.
      */
     goToOrders(opts = {}) {
@@ -365,7 +367,8 @@ async function refresh() {
  *  - ao voltar para a aba/app, ao recuperar a internet;
  *  - a cada 20 s enquanto o realtime estiver fora do ar (com ele no ar, a
  *    cada 2 min só como garantia).
- * Se nada mudou, a tela não é redesenhada.
+ * Se nada mudou, a tela não é redesenhada, e a consulta é a "leve" (só
+ * id + data de alteração), que gasta quase nada de dados móveis.
  */
 
 let autoSyncStarted = false;
@@ -377,7 +380,7 @@ function startAutoSync() {
   const sync = (minGapMs) => {
     if (document.hidden || !Store.isLoaded()) return;
     if (Store.msSinceLoad() < minGapMs) return;
-    Store.load({ force: true }).catch((err) => console.warn('sincronização falhou', err));
+    Store.load({ force: true, light: true }).catch((err) => console.warn('sincronização falhou', err));
   };
 
   document.addEventListener('visibilitychange', () => sync(3000));

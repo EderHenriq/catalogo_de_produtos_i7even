@@ -1,4 +1,4 @@
-# i7even Store — Controle de Pedidos
+# i7even Store - Controle de Pedidos
 
 Sistema de controle de pedidos da **i7even Store**: iPhone, Apple Watch, MacBook,
 iPad, AirPods, consoles, perfumes e acessórios.
@@ -24,21 +24,21 @@ e login. Publica no Netlify em segundos e abre em qualquer aparelho com internet
 ## Como colocar no ar
 
 > **Já configurou antes?** O esquema mudou (histórico de pagamentos). Rode o
-> `supabase/schema.sql` de novo no SQL Editor — ele é idempotente, não apaga
+> `supabase/schema.sql` de novo no SQL Editor - ele é idempotente, não apaga
 > nada e só acrescenta o que falta.
 
-### Passo 1 — Criar a tabela no Supabase
+### Passo 1 - Criar a tabela no Supabase
 
 1. Abra o painel do seu projeto → menu lateral **SQL Editor** → **New query**.
 2. Abra o arquivo [`supabase/schema.sql`](supabase/schema.sql) deste repositório,
    copie **tudo** e cole no editor.
 3. Clique em **Run**. Deve aparecer *Success*.
 
-Isso cria a tabela `orders`, os índices, os cálculos automáticos de total/lucro e —
-o mais importante — as regras de **RLS** que impedem qualquer pessoa de ler seus
+Isso cria a tabela `orders`, os índices, os cálculos automáticos de total/lucro e -
+o mais importante - as regras de **RLS** que impedem qualquer pessoa de ler seus
 dados sem estar logada na sua conta.
 
-### Passo 2 — Criar os dois usuários e fechar o cadastro
+### Passo 2 - Criar os dois usuários e fechar o cadastro
 
 A loja tem dois donos e **uma base de pedidos só**: o que o Eder cadastra a Julie
 vê, e vice-versa.
@@ -50,14 +50,14 @@ vê, e vice-versa.
    | `eder.pontes2014@gmail.com` | *Auto Confirm User* |
    | `juluccas1609@gmail.com` | *Auto Confirm User* |
 
-   A senha de cada um você define nessa tela — senha não entra em arquivo nenhum
+   A senha de cada um você define nessa tela - senha não entra em arquivo nenhum
    deste repositório.
 
 2. Volte ao **SQL Editor** e rode o `schema.sql` de novo (ou só o último bloco
    dele). É o que autoriza os dois e-mails na tabela `store_members`.
 
    > Só quem está em `store_members` enxerga alguma linha. Criar o usuário no
-   > Supabase **não** dá acesso sozinho — precisa desse passo.
+   > Supabase **não** dá acesso sozinho - precisa desse passo.
 
 3. **Authentication → Sign In / Providers → Email**:
    desligue **"Allow new users to sign up"**.
@@ -80,7 +80,7 @@ delete from public.store_members
 where user_id = (select id from auth.users where email = 'email@dela.com');
 ```
 
-### Passo 3 — Colar a chave no projeto
+### Passo 3 - Colar a chave no projeto
 
 Abra [`assets/js/config.js`](assets/js/config.js) e preencha:
 
@@ -91,16 +91,16 @@ const HARDCODED = {
 };
 ```
 
-A chave está em **Project Settings → API Keys → Publishable key**. Nos projetos mais antigos ela aparece como `anon` `public` na aba *Legacy* — as duas funcionam.
+A chave está em **Project Settings → API Keys → Publishable key**. Nos projetos mais antigos ela aparece como `anon` `public` na aba *Legacy* - as duas funcionam.
 
 > ⚠️ Use a **publishable** (ou `anon public`). A **secret** / `service_role`
-> **nunca** pode aparecer no navegador — ela ignora o RLS por completo.
+> **nunca** pode aparecer no navegador - ela ignora o RLS por completo.
 >
 > Se preferir não deixar a chave no repositório, é só deixar `anonKey: ''`: na
 > primeira abertura o próprio sistema pede a chave e guarda no navegador. A
 > desvantagem é ter que digitar uma vez em cada aparelho.
 
-### Passo 4 — Publicar no Netlify
+### Passo 4 - Publicar no Netlify
 
 Como não existe build, é o caminho mais curto possível:
 
@@ -126,7 +126,7 @@ Como não existe build, é o caminho mais curto possível:
 
 Por último, volte ao Supabase em **Authentication → URL Configuration** e adicione
 o endereço do Netlify (ex.: `https://i7even-pedidos.netlify.app`) em **Site URL** e
-em **Redirect URLs** — é o que faz o "esqueci minha senha" funcionar.
+em **Redirect URLs** - é o que faz o "esqueci minha senha" funcionar.
 
 💡 No celular, abra o site e use **Compartilhar → Adicionar à Tela de Início**.
 Ele abre em tela cheia, com cara de aplicativo.
@@ -141,7 +141,7 @@ Botão **Novo pedido** (ou tecla `N`).
 
 O coração da coisa é o **seletor de produtos**: escolha a categoria, marque um ou
 vários modelos de uma vez e, para cada um marcado, aparece uma linha com os chips
-de **capacidade**, **cor** e **condição** — um toque em cada, digita o valor e
+de **capacidade**, **cor** e **condição** - um toque em cada, digita o valor e
 pronto. Dá para montar um pedido de 3 aparelhos em menos de 30 segundos.
 
 Fora do catálogo? Categoria **Item avulso**: digita o nome e o preço.
@@ -162,10 +162,10 @@ abrir nada. Dentro do pedido, a trilha de etapas também é clicável.
 | `/` | Focar a busca |
 | Busca | Nome, telefone, nº do pedido, IMEI, rastreio, observação |
 | Seleção múltipla | Marque vários e mude status / exporte / exclua em lote |
-| Modo privacidade | Borra todos os valores em R$ — para conferir a tela em público |
+| Modo privacidade | Borra todos os valores em R$ - para conferir a tela em público |
 | Tema | Claro, escuro ou automático (segue o aparelho) |
 | Imprimir | Gera o comprovante do pedido (ou salva em PDF) |
-| Exportar | CSV de pedidos, de itens e de clientes — abre direto no Excel |
+| Exportar | CSV de pedidos, de itens e de clientes - abre direto no Excel |
 | Backup | Ajustes → *Baixar backup (JSON)* |
 
 O sistema também marca sozinho os pedidos **parados há 5+ dias** e os
@@ -185,7 +185,7 @@ O que o sistema calcula sozinho a partir desses lançamentos:
 | Campo | Como sai |
 |---|---|
 | Já recebido | soma de todos os lançamentos |
-| Falta receber | total do pedido − já recebido |
+| Falta receber | total do pedido - já recebido |
 | Situação do pagamento | `Pendente` → `Parcial` → `Pago`, automático |
 
 > **Ninguém digita "já recebido".** Esse número é calculado pelo banco, na hora
@@ -194,8 +194,8 @@ O que o sistema calcula sozinho a partir desses lançamentos:
 
 Isso também separa dois números que o parcelamento descola:
 
-- **Faturamento do período** — o que foi vendido, pela data do pedido
-- **Entrou no caixa no período** — o que efetivamente pingou, pela data de cada
+- **Faturamento do período** - o que foi vendido, pela data do pedido
+- **Entrou no caixa no período** - o que efetivamente pingou, pela data de cada
   pagamento
 
 Os dois aparecem lado a lado em **Relatórios**. Uma venda de setembro parcelada
@@ -207,10 +207,10 @@ outubro e novembro.
 Se você preencher o **custo** do item, o sistema calcula:
 
 ```
-lucro = (produtos − desconto) − custo das mercadorias − frete que você pagou
+lucro = (produtos - desconto) - custo das mercadorias - frete que você pagou
 ```
 
-Sem o custo, o campo simplesmente não aparece — não atrapalha quem não quer
+Sem o custo, o campo simplesmente não aparece - não atrapalha quem não quer
 controlar isso.
 
 ---
@@ -231,7 +231,7 @@ O que muda em relação ao desktop:
 | Tabela de pedidos | Cartões, com caixa de seleção para ações em lote |
 | Filtros todos na barra | Chips de status deslizando + botão **Filtros** que abre uma folha |
 | Tabela de relatório | Lista empilhada, sem rolar de lado |
-| Seção de entrega aberta | Começa recolhida — o cadastro rápido fica curto |
+| Seção de entrega aberta | Começa recolhida - o cadastro rápido fica curto |
 | Busca na barra superior | Segunda linha da barra, sempre do tamanho do dedo |
 
 Detalhes que importam no Safari do iPhone:
@@ -251,16 +251,16 @@ Detalhes que importam no Safari do iPhone:
 
 O sistema usa a marca real da loja, não um placeholder:
 
-- **Logo** — `assets/brand/i7even-avatar-7.svg` (o `7` com gradiente) como ícone, e
+- **Logo** - `assets/brand/i7even-avatar-7.svg` (o `7` com gradiente) como ícone, e
   o wordmark `I7even` aplicado como máscara CSS, então ele assume a cor do tema
   automaticamente. Arquivos vindos do brandbook, com os metadados removidos.
 - **Sora** para textos e títulos; **IBM Plex Mono** para todo número da operação
   (valores, totais, código do pedido, eixos dos gráficos) e para os rótulos em
-  caixa alta — exatamente a regra do brandbook.
+  caixa alta - exatamente a regra do brandbook.
 - **Superfícies da marca**: `#0e0f11` e `#17181a` no escuro, `#f4f4f2` no claro.
 
 **Uma diferença consciente do brandbook:** a marca é monocromática por decisão de
-projeto, mas um painel de operação precisa de cor para funcionar — verde de
+projeto, mas um painel de operação precisa de cor para funcionar - verde de
 "finalizado", âmbar de "aguardando pagamento", azul do botão de ação. Sem isso,
 conferir status vira leitura de texto. A cor aqui é **função, não decoração**, e
 fica restrita a status e ações; todo o resto do sistema é monocromático. Se
@@ -274,12 +274,12 @@ Pedidos guardam nome, telefone e endereço de clientes. O que protege esses dado
 
 | Camada | O que faz |
 |---|---|
-| **RLS no banco** | O banco só devolve linhas para quem está na tabela `store_members` (você e a Julie). Para qualquer outro, a consulta volta vazia — a política roda no Postgres, não no navegador. |
+| **RLS no banco** | O banco só devolve linhas para quem está na tabela `store_members` (você e a Julie). Para qualquer outro, a consulta volta vazia - a política roda no Postgres, não no navegador. |
 | **Cadastro fechado** | Depois do Passo 2, ninguém mais cria conta. E conta nova sem entrada em `store_members` não enxerga nada. |
 | **Chave anon** | É pública por natureza e inútil sem login. A `service_role` não existe neste projeto. |
 | **CSP restrita** | O navegador só executa scripts nossos e do jsDelivr, e só conversa com o Supabase e o ViaCEP. Bloqueia injeção de script de terceiros. |
 | **HSTS + `frame-ancestors 'none'`** | Só HTTPS, e o painel não pode ser embutido em iframe de ninguém (anti-clickjacking). |
-| **Escape de HTML** | Todo dado digitado passa por `esc()` antes de virar HTML — nome de cliente não vira código. |
+| **Escape de HTML** | Todo dado digitado passa por `esc()` antes de virar HTML - nome de cliente não vira código. |
 | **Validação no banco** | Tamanhos máximos, status permitidos e totais recalculados por *trigger*: o navegador não dita o valor final do pedido. |
 | **Logout automático** | 30 minutos sem uso e a sessão cai (ajustável em `config.js`). |
 | **`noindex`** | Fora dos buscadores. |
@@ -327,12 +327,12 @@ simples. Para acrescentar um modelo:
 
 Regras:
 
-- O `id` é a chave gravada nos pedidos — **não renomeie** um `id` já usado.
+- O `id` é a chave gravada nos pedidos - **não renomeie** um `id` já usado.
 - `todo: true` marca o modelo como "a confirmar" e mostra um aviso discreto na
   interface.
 
 **Atenção à linha iPhone 18:** ela já está cadastrada, mas as **cores e capacidades
-são provisórias** (marcadas com `todo: true`) — eu não tinha as especificações
+são provisórias** (marcadas com `todo: true`) - eu não tinha as especificações
 oficiais. Assim que a Apple anunciar, ajuste os valores nesse arquivo. Todo o
 restante do catálogo (iPhone 11 até 17 Pro Max, Air e 16e) está com as
 especificações reais.
@@ -392,25 +392,25 @@ python -m http.server 8000
 # abra http://localhost:8000
 ```
 
-(Abrir o `index.html` direto com dois cliques **não funciona** — módulos ES exigem
+(Abrir o `index.html` direto com dois cliques **não funciona** - módulos ES exigem
 um servidor.)
 
 ---
 
 ## Problemas comuns
 
-**"Falta criar a tabela"** — o Passo 1 não rodou. Volte ao SQL Editor e execute o
+**"Falta criar a tabela"** - o Passo 1 não rodou. Volte ao SQL Editor e execute o
 `schema.sql`.
 
-**"E-mail ou senha incorretos"** — confira se o usuário foi criado em
+**"E-mail ou senha incorretos"** - confira se o usuário foi criado em
 *Authentication → Users* e está confirmado.
 
-**A tela fica no spinner** — abra o console do navegador (F12). Se aparecer erro de
+**A tela fica no spinner** - abra o console do navegador (F12). Se aparecer erro de
 CSP, é porque você adicionou algum recurso externo novo; libere o endereço em
 `netlify.toml`, no `Content-Security-Policy`.
 
-**O CEP não preenche o endereço** — o ViaCEP pode estar fora do ar. Digite o
+**O CEP não preenche o endereço** - o ViaCEP pode estar fora do ar. Digite o
 endereço à mão; nada mais é afetado.
 
-**Mudei um arquivo e o site não atualizou** — dê um *hard refresh*
+**Mudei um arquivo e o site não atualizou** - dê um *hard refresh*
 (`Ctrl + Shift + R`). O `netlify.toml` já manda revalidar a cada visita.

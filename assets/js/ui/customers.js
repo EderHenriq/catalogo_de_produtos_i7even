@@ -1,4 +1,4 @@
-/** Clientes — derivados dos pedidos, sem cadastro separado para manter. */
+/** Clientes - derivados dos pedidos, sem cadastro separado para manter. */
 
 import * as Store from '../core/store.js';
 import { emptyState, openMenu, toast } from './kit.js';
@@ -7,6 +7,7 @@ import { icon } from './icons.js';
 import { normalize } from '../data/catalog.js';
 import {
   esc, money, maskPhone, whatsappLink, relativeDate, initials, toCSV, downloadFile,
+  todayISO, isMobile, onLayoutChange,
 } from '../core/utils.js';
 
 let term = '';
@@ -42,8 +43,9 @@ export function mount(host, ctx) {
         </div>
       </div>
 
-      ${list.length ? `
-        <div class="table-wrap hide-mobile">
+      ${!list.length ? emptyState({ emoji: '🔍', title: 'Nenhum cliente com esse nome' })
+        : isMobile() ? cardsHTML(list) : `
+        <div class="table-wrap">
           <table class="data">
             <thead>
               <tr><th>Cliente</th><th>Contato</th><th>Cidade</th>
@@ -59,8 +61,8 @@ export function mount(host, ctx) {
                       <span class="cell-primary truncate" style="max-width:190px">${esc(c.name)}</span>
                     </div>
                   </td>
-                  <td class="small">${c.phone ? esc(maskPhone(c.phone)) : '<span class="dim">—</span>'}</td>
-                  <td class="small muted">${esc([c.city, c.uf].filter(Boolean).join(' - ') || '—')}</td>
+                  <td class="small">${c.phone ? esc(maskPhone(c.phone)) : '<span class="dim">-</span>'}</td>
+                  <td class="small muted">${esc([c.city, c.uf].filter(Boolean).join(' - ') || '-')}</td>
                   <td class="right mono">${esc(c.orders)}</td>
                   <td class="right mono strong money-sensitive">${esc(money(c.spent))}</td>
                   <td class="small muted nowrap">${esc(relativeDate(c.lastAt))}</td>
@@ -70,16 +72,20 @@ export function mount(host, ctx) {
                 </tr>`).join('')}
             </tbody>
           </table>
-        </div>
+        </div>`}`;
+  }
 
-        <div class="order-cards only-mobile">
+  /** No celular a tabela vira cartões. */
+  function cardsHTML(list) {
+    return `
+        <div class="order-cards">
           ${list.map((c) => `
             <div class="order-card" data-name="${esc(c.name)}">
               <div class="row gap-3">
                 <span class="avatar">${esc(initials(c.name))}</span>
                 <div class="grow truncate">
                   <div class="cell-primary truncate">${esc(c.name)}</div>
-                  <div class="cell-sub">${esc(c.phone ? maskPhone(c.phone) : '—')} · ${esc(relativeDate(c.lastAt))}</div>
+                  <div class="cell-sub">${esc(c.phone ? maskPhone(c.phone) : '-')} · ${esc(relativeDate(c.lastAt))}</div>
                 </div>
                 <div class="right">
                   <div class="strong mono money-sensitive">${esc(money(c.spent))}</div>
@@ -87,8 +93,7 @@ export function mount(host, ctx) {
                 </div>
               </div>
             </div>`).join('')}
-        </div>`
-      : emptyState({ emoji: '🔍', title: 'Nenhum cliente com esse nome' })}`;
+        </div>`;
   }
 
   root.addEventListener('click', (e) => {
@@ -134,24 +139,25 @@ export function mount(host, ctx) {
         paidAmount: 0,
         installments: 1,
         paymentStatus: 'pendente',
-        orderDate: new Date().toISOString().slice(0, 10),
+        orderDate: todayISO(),
       },
       onSaved: render,
     });
   }
 
   const unsubscribe = Store.subscribe(() => render());
+  const offLayout = onLayoutChange(() => render());
   render();
 
   return {
     onSearch(value) { term = value; render(); },
     refresh: render,
-    destroy() { unsubscribe(); },
+    destroy() { unsubscribe(); offLayout(); },
   };
 }
 
 /* ---------------------------------------------------------- exportação */
-/* Chamada só pela tela de Ajustes — é lá que ficam todas as exportações. */
+/* Chamada só pela tela de Ajustes - é lá que ficam todas as exportações. */
 
 export function exportCustomers() {
   const rows = Store.customers().map((c) => ({
@@ -167,7 +173,7 @@ export function exportCustomers() {
   }));
   if (!rows.length) { toast('Nada para exportar.', { kind: 'warn' }); return; }
   downloadFile(
-    `clientes-i7even-${new Date().toISOString().slice(0, 10)}.csv`,
+    `clientes-i7even-${todayISO()}.csv`,
     toCSV(rows),
     'text/csv;charset=utf-8',
   );

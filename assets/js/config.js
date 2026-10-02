@@ -14,7 +14,7 @@
 
 const HARDCODED = {
   url: 'https://vsfrnhynhzhpzeymavtx.supabase.co',
-  // Chave "publishable" — feita para ficar no navegador. Sozinha ela não lê
+  // Chave "publishable" - feita para ficar no navegador. Sozinha ela não lê
   // nada: quem libera as linhas é o login + o RLS da tabela.
   anonKey: 'sb_publishable__GLUx1HnUtWOQSL3H9iGHA_yBneT7Gh',
 };
@@ -43,7 +43,7 @@ export function getConfig() {
   return null;
 }
 
-/** URL já definida no arquivo — a tela de configuração só pede a chave. */
+/** URL já definida no arquivo - a tela de configuração só pede a chave. */
 export function presetUrl() {
   return HARDCODED.url || '';
 }
@@ -57,7 +57,7 @@ export function saveConfig({ url, anonKey }) {
     throw new Error('A chave anon parece incompleta.');
   }
   if (/service_role/i.test(clean.anonKey)) {
-    throw new Error('Essa é a service_role key — nunca use no navegador. Use a chave "anon / public".');
+    throw new Error('Essa é a service_role key - nunca use no navegador. Use a chave "anon / public".');
   }
   localStorage.setItem(STORAGE_KEY, JSON.stringify(clean));
   return clean;
@@ -73,7 +73,7 @@ export const APP = {
   subtitle: 'Controle de pedidos',
 
   /**
-   * Atalhos de e-mail na tela de login — poupa digitação no celular.
+   * Atalhos de e-mail na tela de login - poupa digitação no celular.
    * Só o e-mail; senha nunca fica no código.
    * Estes e-mails ficam visíveis no código público do site. Se preferir
    * que não apareçam, troque por uma lista vazia: `contas: []`.

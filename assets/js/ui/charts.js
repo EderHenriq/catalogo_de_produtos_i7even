@@ -1,5 +1,5 @@
 /**
- * Gráficos em SVG puro — sem biblioteca externa.
+ * Gráficos em SVG puro - sem biblioteca externa.
  *
  * Desenha no tamanho real do contêiner (ResizeObserver) em vez de esticar um
  * viewBox fixo: assim o texto não deforma no celular e o traço fica sempre
@@ -86,7 +86,7 @@ export function lineChart(host, spec) {
 
     /*
      * Eixo X: a quantidade de rótulos vem da largura disponível, não de um
-     * número fixo — num iPhone de 390px cabem 4, num monitor cabem 8.
+     * número fixo - num iPhone de 390px cabem 4, num monitor cabem 8.
      * O último é sempre exibido; o penúltimo some se fosse encostar nele.
      */
     const maxLabels = Math.max(2, Math.floor(plotW / 58));
@@ -203,7 +203,7 @@ export function lineChart(host, spec) {
   };
 }
 
-/** Legenda em HTML — sempre presente quando há 2+ séries. */
+/** Legenda em HTML - sempre presente quando há 2+ séries. */
 export function legendHTML(series) {
   return series
     .map((s, i) => `
@@ -213,7 +213,7 @@ export function legendHTML(series) {
     .join('');
 }
 
-/** Tabela equivalente ao gráfico — alternativa acessível e conferível. */
+/** Tabela equivalente ao gráfico - alternativa acessível e conferível. */
 export function chartTableHTML(labels, series, format = money) {
   return `
     <table class="chart-table">
@@ -234,7 +234,7 @@ export function chartTableHTML(labels, series, format = money) {
 
 /**
  * Ranking: uma série só, mesmo matiz para todas as barras (o comprimento já
- * carrega a informação — cor por posição seria ruído).
+ * carrega a informação - cor por posição seria ruído).
  */
 export function rankBarsHTML(rows, { format = money, color = 'var(--viz-1)', emptyText = 'Sem dados no período.' } = {}) {
   if (!rows.length) return `<p class="small dim">${esc(emptyText)}</p>`;

@@ -11,6 +11,7 @@
   <meta name="referrer" content="strict-origin-when-cross-origin">
   <meta name="color-scheme" content="light dark">
   <meta name="theme-color" content="#f4f4f2">
+  <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="apple-mobile-web-app-title" content="i7even">
@@ -22,6 +23,41 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link rel="preconnect" href="https://vsfrnhynhzhpzeymavtx.supabase.co" crossorigin>
+  <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
+
+  <!--
+    Pré-carrega todos os módulos de uma vez. Sem isto o navegador só descobre
+    um arquivo depois de baixar quem o importa: no 4G eram 4 ou 5 rodadas em
+    fila antes de a tela aparecer.
+  -->
+  <link rel="modulepreload" href="assets/js/app.js">
+  <link rel="modulepreload" href="assets/js/config.js">
+  <link rel="modulepreload" href="assets/js/core/supabase.js">
+  <link rel="modulepreload" href="assets/js/core/store.js">
+  <link rel="modulepreload" href="assets/js/core/utils.js">
+  <link rel="modulepreload" href="assets/js/core/constants.js">
+  <link rel="modulepreload" href="assets/js/data/catalog.js">
+  <link rel="modulepreload" href="assets/js/ui/theme.js">
+  <link rel="modulepreload" href="assets/js/ui/gate.js">
+  <link rel="modulepreload" href="assets/js/ui/icons.js">
+  <link rel="modulepreload" href="assets/js/ui/kit.js">
+  <link rel="modulepreload" href="assets/js/ui/inputs.js">
+  <link rel="modulepreload" href="assets/js/ui/order-form.js">
+  <link rel="modulepreload" href="assets/js/ui/order-detail.js">
+  <link rel="modulepreload" href="assets/js/ui/product-picker.js">
+  <link rel="modulepreload" href="assets/js/ui/payments.js">
+  <link rel="modulepreload" href="assets/js/ui/charts.js">
+  <link rel="modulepreload" href="assets/js/ui/dashboard.js">
+  <link rel="modulepreload" href="assets/js/ui/orders.js">
+  <link rel="modulepreload" href="assets/js/ui/customers.js">
+  <link rel="modulepreload" href="assets/js/ui/reports.js">
+  <link rel="modulepreload" href="assets/js/ui/settings.js">
+  <link rel="modulepreload" href="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.2/+esm">
+  <link rel="modulepreload" href="https://cdn.jsdelivr.net/npm/@supabase/auth-js@2.117.2/+esm">
+  <link rel="modulepreload" href="https://cdn.jsdelivr.net/npm/@supabase/postgrest-js@2.117.2/+esm">
+  <link rel="modulepreload" href="https://cdn.jsdelivr.net/npm/@supabase/realtime-js@2.117.2/+esm">
+  <link rel="modulepreload" href="https://cdn.jsdelivr.net/npm/@supabase/storage-js@2.117.2/+esm">
+  <link rel="modulepreload" href="https://cdn.jsdelivr.net/npm/@supabase/functions-js@2.117.2/+esm">
   <!-- Sora e IBM Plex Mono: as duas fontes da identidade da i7even. -->
   <link rel="stylesheet"
         href="https://fonts.googleapis.com/css2?family=Sora:wght@200..700&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
@@ -34,7 +70,7 @@
   <!-- Camada mobile/iOS por último: ela sobrescreve o que vem acima. -->
   <link rel="stylesheet" href="assets/css/mobile.css">
 
-  <!-- Aplica o tema salvo antes da primeira pintura — evita o "flash" branco. -->
+  <!-- Aplica o tema salvo antes da primeira pintura - evita o "flash" branco. -->
   <script src="assets/js/preload-theme.js"></script>
 </head>
 <body>
