@@ -6,11 +6,12 @@ import {
   STATUSES, PAYMENT_METHODS, CHANNELS, SHIPPING_METHODS, UFS,
 } from '../core/constants.js';
 import { openProductPicker } from './product-picker.js';
+import { openItemEditor } from './item-editor.js';
 import { paymentsHTML, wirePayments } from './payments.js';
 import { openModal, toast, toastError, confirmDialog, withLoading } from './kit.js';
 import { icon } from './icons.js';
 import {
-  esc, money, parseMoney, moneyInputValue, maskPhone, maskCEP, onlyDigits, todayISO, isMobile,
+  esc, money, parseMoney, moneyInputValue, maskPhone, maskCEP, onlyDigits, todayISO, isMobile, uid,
 } from '../core/utils.js';
 
 /** Atributos comuns dos campos de dinheiro: teclado só de números no celular. */
@@ -44,6 +45,7 @@ export function computeTotals(order) {
 export function openOrderForm({ order = null, onSaved } = {}) {
   const draft = order ? structuredClone(order) : newOrderDraft();
   const editing = !!draft.id;
+  const initial = JSON.stringify(draft);
 
   const modal = openModal({
     title: editing ? `Pedido #${String(draft.code).padStart(4, '0')}` : 'Novo pedido',
@@ -53,6 +55,20 @@ export function openOrderForm({ order = null, onSaved } = {}) {
     footer: `
       <button class="btn btn-ghost" data-close>Cancelar</button>
       <button class="btn btn-primary" data-save>${editing ? 'Salvar alterações' : 'Criar pedido'}</button>`,
+    // Um toque errado no X (ou o "voltar" do Android) não pode jogar fora
+    // um pedido inteiro já digitado.
+    beforeClose: async () => {
+      if (JSON.stringify(draft) === initial) return true;
+      return confirmDialog({
+        title: editing ? 'Descartar as alterações?' : 'Descartar este pedido?',
+        message: editing
+          ? 'O que você mudou neste pedido ainda não foi salvo.'
+          : 'O pedido ainda não foi criado. Tudo o que foi preenchido será perdido.',
+        confirmText: 'Descartar',
+        cancelText: 'Continuar editando',
+        danger: true,
+      });
+    },
   });
 
   const panel = modal.panel;
@@ -96,7 +112,7 @@ export function openOrderForm({ order = null, onSaved } = {}) {
     $items.innerHTML = `
       ${draft.items.map((it, i) => `
         <div class="item-row" data-index="${i}">
-          <div class="grow">
+          <div class="grow" data-edit-item="${i}" role="button" tabindex="0" aria-label="Editar item">
             <div class="item-title">${esc(it.productName || 'Item')}</div>
             <div class="item-meta">
               ${[it.size, it.variant, it.color, it.condition, it.origin]
@@ -104,14 +120,20 @@ export function openOrderForm({ order = null, onSaved } = {}) {
               ${it.serial ? `<span class="tag">${icon('tag')} ${esc(it.serial)}</span>` : ''}
               ${it.qty > 1 ? `<span class="tag">${esc(it.qty)}×</span>` : ''}
             </div>
+            ${it.note ? `<div class="xs dim" style="margin-top:5px">${esc(it.note)}</div>` : ''}
           </div>
           <div class="item-numbers">
             <div class="right">
               <div class="strong mono money-sensitive">${esc(money((Number(it.unitPrice) || 0) * (Number(it.qty) || 1)))}</div>
+              ${it.qty > 1 ? `<div class="xs dim mono money-sensitive">${esc(it.qty)} × ${esc(money(it.unitPrice))}</div>` : ''}
               ${it.unitCost ? `<div class="xs dim mono money-sensitive">custo ${esc(money(it.unitCost * (it.qty || 1)))}</div>` : ''}
+              ${!(Number(it.unitPrice) > 0) ? `<div class="xs neg">sem valor</div>` : ''}
             </div>
-            <button type="button" class="icon-btn sm" data-edit-item="${i}" aria-label="Editar valor">${icon('edit')}</button>
-            <button type="button" class="icon-btn sm" data-del-item="${i}" aria-label="Remover item">${icon('trash')}</button>
+            <div class="item-actions">
+              <button type="button" class="icon-btn sm" data-edit-item="${i}" aria-label="Editar item">${icon('edit')}</button>
+              <button type="button" class="icon-btn sm" data-dup-item="${i}" aria-label="Duplicar item">${icon('copy')}</button>
+              <button type="button" class="icon-btn sm" data-del-item="${i}" aria-label="Remover item">${icon('trash')}</button>
+            </div>
           </div>
         </div>`).join('')}
       <button type="button" class="btn btn-outline btn-sm" data-pick style="margin-top:12px">
@@ -145,10 +167,11 @@ export function openOrderForm({ order = null, onSaved } = {}) {
     if (e.target.closest('[data-pick]')) {
       openProductPicker({
         defaultCategory: draft.items.at(-1)?.categoryId || 'iphone',
+        items: () => draft.items,
         onAdd: (items) => {
           draft.items.push(...items);
           renderItems();
-          toast(`${items.length} ${items.length === 1 ? 'item adicionado' : 'itens adicionados'}`);
+          renderPayments();
         },
       });
       return;
@@ -156,51 +179,47 @@ export function openOrderForm({ order = null, onSaved } = {}) {
 
     const del = e.target.closest('[data-del-item]');
     if (del) {
-      draft.items.splice(Number(del.dataset.delItem), 1);
+      const index = Number(del.dataset.delItem);
+      const [removed] = draft.items.splice(index, 1);
       renderItems();
+      renderPayments();
+      if (removed) toast(`${removed.productName || 'Item'} removido`, { kind: 'info', duration: 2200 });
+      return;
+    }
+
+    const dup = e.target.closest('[data-dup-item]');
+    if (dup) {
+      const index = Number(dup.dataset.dupItem);
+      const src = draft.items[index];
+      if (!src) return;
+      // Cópia para o segundo aparelho igual: mesmo modelo e valor, outro IMEI.
+      draft.items.splice(index + 1, 0, { ...structuredClone(src), id: uid(), serial: '' });
+      renderItems();
+      renderPayments();
       return;
     }
 
     const edit = e.target.closest('[data-edit-item]');
-    if (edit) editItemValues(Number(edit.dataset.editItem));
+    if (edit) editItem(Number(edit.dataset.editItem));
   });
 
-  function editItemValues(index) {
+  panel.addEventListener('keydown', (e) => {
+    if ((e.key === 'Enter' || e.key === ' ') && e.target.matches('[data-edit-item][role="button"]')) {
+      e.preventDefault();
+      editItem(Number(e.target.dataset.editItem));
+    }
+  });
+
+  function editItem(index) {
     const it = draft.items[index];
     if (!it) return;
-    const sub = openModal({
-      title: it.productName || 'Item',
-      subtitle: [it.variant, it.color].filter(Boolean).join(' · '),
-      body: `
-        <div class="form-grid">
-          <div class="field span-4"><label class="label" for="e-qty">Quantidade</label>
-            <input class="input" id="e-qty" type="number" min="1" max="999" value="${esc(it.qty)}"></div>
-          <div class="field span-4"><label class="label" for="e-price">Valor unitário</label>
-            <div class="money-input"><input class="input" id="e-price" ${MONEY_ATTRS}
-              value="${esc(moneyInputValue(it.unitPrice))}"></div></div>
-          <div class="field span-4"><label class="label" for="e-cost">Custo unitário</label>
-            <div class="money-input"><input class="input" id="e-cost" ${MONEY_ATTRS}
-              value="${esc(moneyInputValue(it.unitCost))}"></div></div>
-          <div class="field span-6"><label class="label" for="e-serial">IMEI / série</label>
-            <input class="input" id="e-serial" maxlength="40" value="${esc(it.serial)}"></div>
-          <div class="field span-6"><label class="label" for="e-warranty">Garantia (dias)</label>
-            <input class="input" id="e-warranty" type="number" min="0" max="3650" value="${esc(it.warrantyDays)}"></div>
-          <div class="field span-12"><label class="label" for="e-note">Observação do item</label>
-            <input class="input" id="e-note" maxlength="240" value="${esc(it.note)}" placeholder="ex.: bateria 92%, com nota"></div>
-        </div>`,
-      footer: `<button class="btn" data-close>Cancelar</button>
-               <button class="btn btn-primary" data-ok>Aplicar</button>`,
-    });
-    sub.foot.querySelector('[data-ok]').addEventListener('click', () => {
-      const g = (id) => sub.panel.querySelector(`#${id}`).value;
-      it.qty = Math.min(Math.max(Number(g('e-qty')) || 1, 1), 999);
-      it.unitPrice = parseMoney(g('e-price'));
-      it.unitCost = parseMoney(g('e-cost'));
-      it.serial = g('e-serial');
-      it.warrantyDays = Number(g('e-warranty')) || 0;
-      it.note = g('e-note');
-      sub.close();
-      renderItems();
+    openItemEditor({
+      item: it,
+      onSave: (novo) => {
+        draft.items[index] = novo;
+        renderItems();
+        renderPayments();
+      },
     });
   }
 
@@ -278,10 +297,19 @@ export function openOrderForm({ order = null, onSaved } = {}) {
 
   /* ------------------------------------------------------------- salvar */
 
-  modal.foot.querySelector('[data-save]').addEventListener('click', async (e) => {
+  const $save = modal.foot.querySelector('[data-save]');
+  const $name = panel.querySelector('[data-field="customerName"]');
+
+  // O aviso de "falta o nome" some assim que a pessoa começa a digitar.
+  $name.addEventListener('input', () => $name.removeAttribute('aria-invalid'));
+
+  $save.addEventListener('click', async () => {
+    if ($save.disabled) return;
     if (!String(draft.customerName).trim()) {
+      $name.setAttribute('aria-invalid', 'true');
+      $name.scrollIntoView({ block: 'center', behavior: 'smooth' });
+      $name.focus({ preventScroll: true });
       toast('Informe o nome do cliente.', { kind: 'warn' });
-      panel.querySelector('[data-field="customerName"]')?.focus();
       return;
     }
     if (!draft.items.length) {
@@ -293,7 +321,10 @@ export function openOrderForm({ order = null, onSaved } = {}) {
       if (!ok) return;
     }
 
-    await withLoading(e.currentTarget, async () => {
+    // `$save` e não `e.currentTarget`: depois de um `await` o evento já
+    // terminou e o currentTarget vira null - o salvamento quebrava em
+    // silêncio quando passava pela confirmação acima.
+    await withLoading($save, async () => {
       try {
         const saved = await Store.save(draft);
         toast(editing ? 'Pedido atualizado' : `Pedido #${String(saved.code).padStart(4, '0')} criado`);
@@ -301,7 +332,7 @@ export function openOrderForm({ order = null, onSaved } = {}) {
         onSaved?.(saved);
       } catch (err) {
         console.error(err);
-        toastError('Não foi possível salvar', err.message || 'Tente novamente.');
+        toastError('Não foi possível salvar', friendlySaveError(err));
       }
     });
   });
@@ -309,6 +340,29 @@ export function openOrderForm({ order = null, onSaved } = {}) {
   renderItems();
   renderPayments();
   return modal;
+}
+
+/**
+ * Mensagem de erro que a pessoa entende. O que importa dizer: o pedido NÃO
+ * foi salvo, mas continua preenchido na tela - dá para tentar de novo.
+ */
+function friendlySaveError(err) {
+  const msg = String(err?.message || err || '');
+  const low = msg.toLowerCase();
+  if (/failed to fetch|networkerror|load failed|network request failed/.test(low)) {
+    return 'Sem conexão com a internet. O pedido continua preenchido: confira o sinal e toque em salvar de novo.';
+  }
+  if (/jwt|token|not authenticated|401/.test(low)) {
+    return 'Sua sessão expirou. Recarregue a página e entre de novo (copie o que for importante antes).';
+  }
+  if (/row-level security|permission denied|42501/.test(low)) {
+    return 'Sua conta não tem permissão para gravar pedidos. Confira o cadastro em store_members no Supabase.';
+  }
+  if (/orders_items_size/.test(low)) return 'O pedido passou do limite de 100 itens.';
+  if (/check constraint|violates/.test(low)) {
+    return `Algum campo está fora do formato aceito pelo banco. Detalhe técnico: ${msg}`;
+  }
+  return msg || 'Tente novamente.';
 }
 
 /* ----------------------------------------------------------- template -- */

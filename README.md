@@ -139,12 +139,23 @@ Ele abre em tela cheia, com cara de aplicativo.
 
 Botão **Novo pedido** (ou tecla `N`).
 
-O coração da coisa é o **seletor de produtos**: escolha a categoria, marque um ou
-vários modelos de uma vez e, para cada um marcado, aparece uma linha com os chips
-de **capacidade**, **cor** e **condição** - um toque em cada, digita o valor e
-pronto. Dá para montar um pedido de 3 aparelhos em menos de 30 segundos.
+O coração da coisa é o **seletor de produtos**: escolha a categoria e toque no
+modelo. Abre a **ficha do aparelho** por cima da grade, com tudo num lugar só:
+chips de **capacidade**, **cor**, **condição** (e caixa/pulseira no Apple Watch),
+quantidade, valor de venda e custo. Toque em **Adicionar** e o item já entra no
+pedido; a grade continua aberta para o próximo.
+
+- O mesmo modelo pode entrar várias vezes (ex.: dois iPhone 15 de cores
+  diferentes) - cada toque abre uma ficha nova.
+- O número no canto do cartão mostra quantos daquele modelo já estão no pedido,
+  e o rodapé soma itens e valor.
+- No formulário, toque no item (ou no lápis) para reabrir a ficha e trocar
+  qualquer coisa, inclusive cor e capacidade. O botão de **duplicar** cria uma
+  cópia com o IMEI em branco, para o segundo aparelho igual.
 
 Fora do catálogo? Categoria **Item avulso**: digita o nome e o preço.
+
+Fechar o formulário com dados preenchidos pede confirmação antes de descartar.
 
 ### O funil
 
@@ -374,7 +385,8 @@ especificações reais.
             ├── orders.js           lista de pedidos
             ├── order-form.js       cadastro/edição
             ├── order-detail.js     ficha do pedido e impressão
-            ├── product-picker.js   seletor por checkbox
+            ├── product-picker.js   seletor de modelos (grade por categoria)
+            ├── item-editor.js      ficha do item: capacidade, cor, valores
             ├── payments.js         sinal, parcelas e saldo em aberto
             ├── customers.js        clientes
             ├── reports.js          relatórios

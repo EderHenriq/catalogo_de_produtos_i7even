@@ -333,18 +333,24 @@
 }
 .pick-name { font-size: var(--fs-md); font-weight: 560; letter-spacing: -.01em; }
 .pick-meta { font-size: var(--fs-xs); color: var(--text-3); }
-.pick-check {
+/* Quantas unidades daquele modelo já estão no pedido. */
+.pick-count {
   position: absolute;
-  top: 9px; right: 9px;
-  width: 17px; height: 17px;
-  border-radius: 50%;
-  background: var(--accent);
-  color: #fff;
-  display: none;
+  top: 8px; right: 8px;
+  display: grid;
   place-items: center;
-  font-size: 10px;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 6px;
+  border-radius: var(--r-full);
+  background: var(--accent);
+  color: var(--on-accent);
+  font-family: var(--font-num);
+  font-size: var(--fs-xs);
+  font-weight: 600;
 }
-.pick[aria-pressed='true'] .pick-check { display: grid; }
+.pick:has(.pick-count) .pick-name { padding-right: 26px; }
+.pick-count.bump { animation: pop var(--t-base) both; }
 
 /* ------------------------------------------------------------ tabela -- */
 
@@ -510,6 +516,27 @@ dialog.modal::backdrop {
     border: 0;
   }
   .modal-foot { padding-bottom: calc(var(--sp-4) + env(safe-area-inset-bottom)); }
+
+  /* Folha que sobe de baixo: a tela de trás continua à vista em cima. */
+  .modal-panel.sheet,
+  .modal-panel.sheet.lg,
+  .modal-panel.sheet.xl {
+    height: auto;
+    max-height: calc(100dvh - 48px - env(safe-area-inset-top));
+    border-radius: var(--r-xl) var(--r-xl) 0 0;
+    border-top: 1px solid var(--divider);
+  }
+  .modal-panel.sheet .modal-head { padding-top: var(--sp-4); }
+}
+
+/* Avisos dentro de um modal (onde eles precisam morar para aparecer). */
+dialog.modal > .toasts { position: fixed; }
+@media (max-width: 860px) {
+  /* No modal, o rodapé tem os botões: o aviso desce do topo para não cobri-los. */
+  dialog.modal > .toasts {
+    top: calc(10px + env(safe-area-inset-top));
+    bottom: auto;
+  }
 }
 
 /* ------------------------------------------------------------ fieldset  */
@@ -574,6 +601,8 @@ details.fieldset > summary:hover { color: var(--text); }
 .item-title { font-weight: 560; font-size: var(--fs-md); letter-spacing: -.01em; }
 .item-meta { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 5px; }
 .item-numbers { display: flex; align-items: center; gap: var(--sp-3); }
+.item-actions { display: flex; align-items: center; gap: 2px; }
+.item-row [data-edit-item][role='button'] { cursor: pointer; min-width: 0; }
 
 .totals {
   display: flex;
@@ -786,38 +815,71 @@ details.fieldset > summary:hover { color: var(--text); }
 
 .picker { display: flex; flex-direction: column; gap: var(--sp-4); }
 
-.picker-cats { position: sticky; top: 0; z-index: 3; padding-bottom: 2px; background: var(--bg-elevated); }
-
-.picker-grid {
-  max-height: 42vh;
-  overflow-y: auto;
-  padding: 3px;
-  margin: -3px;
-  align-content: start;
-}
-@media (max-width: 860px) { .picker-grid { max-height: none; } }
-
-.picker-tray {
+/* Categorias e busca ficam presas no topo enquanto a grade rola. */
+.picker-head {
+  position: sticky;
+  top: calc(-1 * var(--sp-5));
+  z-index: 3;
   display: flex;
   flex-direction: column;
   gap: var(--sp-3);
-  padding-top: var(--sp-4);
-  border-top: 1px solid var(--divider);
+  margin: calc(-1 * var(--sp-5)) calc(-1 * var(--sp-5)) 0;
+  padding: var(--sp-5) var(--sp-5) var(--sp-3);
+  background: var(--bg-elevated);
+  border-bottom: 1px solid var(--divider);
 }
 
-.config-row {
+/* A busca do topo da página cresce com flex: aqui, numa coluna, ela esticava
+   na vertical e abria um vão no meio da tela. */
+.picker-head .search { flex: none; max-width: none; }
+
+.picker-grid { padding: 3px; margin: -3px; align-content: start; }
+
+.picker-empty {
+  grid-column: 1 / -1;
   display: flex;
   flex-direction: column;
+  align-items: flex-start;
   gap: var(--sp-3);
-  padding: var(--sp-4);
-  background: var(--surface-2);
-  border: 1px solid var(--divider);
-  border-radius: var(--r-md);
-  animation: rise var(--t-base) both;
 }
 
 .config-field { display: flex; flex-direction: column; gap: 6px; }
 .config-field > .label { font-size: var(--fs-xs); text-transform: uppercase; letter-spacing: .04em; }
+
+/* ------------------------------------------------------ ficha do item  */
+
+.item-editor { display: flex; flex-direction: column; gap: var(--sp-4); }
+
+.stepper { display: flex; align-items: center; gap: 6px; }
+.stepper .input { text-align: center; min-width: 0; flex: 1; -moz-appearance: textfield; }
+.stepper .input::-webkit-outer-spin-button,
+.stepper .input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+.stepper .icon-btn {
+  flex: none;
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  background: var(--surface);
+}
+
+.ie-extras > summary {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 40px;
+  font-size: var(--fs-sm);
+  font-weight: 550;
+  color: var(--text-2);
+  cursor: pointer;
+  list-style: none;
+  user-select: none;
+}
+.ie-extras > summary::-webkit-details-marker { display: none; }
+.ie-extras > summary .icon { width: 16px; height: 16px; transition: transform var(--t-fast); }
+.ie-extras[open] > summary { margin-bottom: var(--sp-3); }
+.ie-extras[open] > summary .icon { transform: rotate(180deg); }
+
+.ie-total { display: flex; flex-direction: column; line-height: 1.25; min-width: 0; }
+.ie-total .strong { font-size: var(--fs-lg); }
 
 /* ------------------------------------------------- pagamentos do pedido */
 

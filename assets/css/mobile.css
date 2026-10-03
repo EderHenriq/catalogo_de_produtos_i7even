@@ -356,8 +356,11 @@ button, a, input, select, textarea, label, summary {
     overflow: hidden;
   }
 
-  .item-row { padding: var(--sp-3); gap: var(--sp-2); }
-  .item-numbers { gap: var(--sp-2); }
+  /* Item do pedido: detalhes em cima, valor e ações numa linha embaixo -
+     antes os botões espremiam as tags e a cor sumia atrás do preço. */
+  .item-row { grid-template-columns: minmax(0, 1fr); padding: var(--sp-3); gap: var(--sp-2); }
+  .item-numbers { justify-content: space-between; gap: var(--sp-2); }
+  .item-numbers > .right { text-align: left; }
 
   .detail-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--sp-3); }
   .detail-item dd { font-size: var(--fs-base); overflow-wrap: anywhere; }
@@ -375,11 +378,19 @@ button, a, input, select, textarea, label, summary {
 
 @media (max-width: 860px) {
   .picker { gap: var(--sp-3); min-width: 0; }
+
+  /* O modal do celular tem respiro menor: a faixa presa acompanha. */
+  .picker-head {
+    top: calc(-1 * var(--sp-4));
+    margin: calc(-1 * var(--sp-4)) calc(-1 * var(--sp-4)) 0;
+    padding: var(--sp-4) var(--sp-4) var(--sp-3);
+    min-width: 0;
+  }
   .picker-cats {
     flex-wrap: nowrap;
     overflow-x: auto;
     min-width: 0;
-    max-width: 100%;
+    max-width: none;
     scrollbar-width: none;
     margin: 0 calc(-1 * var(--sp-4));
     padding: 2px var(--sp-4);
@@ -389,22 +400,34 @@ button, a, input, select, textarea, label, summary {
   .picker-cats .chip { flex: none; }
 
   /*
-   * A grade rola dentro de si mesma. Sem isso, com ~30 modelos de iPhone numa
-   * coluna só, a configuração do item marcado ficava a três telas de distância.
+   * A configuração agora abre numa folha própria ao tocar no modelo, então a
+   * grade pode ocupar o modal inteiro e rolar junto com ele.
    */
   .picker-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: var(--sp-2);
-    max-height: 44vh;
-    overflow-y: auto;
-    overscroll-behavior: contain;
-    -webkit-overflow-scrolling: touch;
   }
   .pick-name { font-size: var(--fs-md); }
   .pick-meta { font-size: 10.5px; }
 
-  .config-row { padding: var(--sp-3); gap: var(--sp-3); }
   .config-field > .label { font-size: var(--fs-sm); }
+
+  /* Ficha do item: chips grandes o bastante para o polegar. */
+  .item-editor { gap: var(--sp-4); }
+  .item-editor .form-grid { gap: var(--sp-3); }
+  .stepper { gap: 4px; }
+  .stepper .icon-btn { width: 40px; height: var(--tap); }
+  .stepper .input { padding-left: 4px; padding-right: 4px; }
+  .ie-extras > summary { min-height: var(--tap); font-size: var(--fs-md); }
+
+  /* Rodapé da ficha: total em cima, botões embaixo, cada um com espaço. */
+  .modal-panel.sheet .modal-foot { flex-wrap: wrap; }
+  .modal-panel.sheet .ie-total {
+    flex: 1 0 100%;
+    flex-direction: row;
+    align-items: baseline;
+    justify-content: space-between;
+  }
 }
 
 /* ===================================================================== */
@@ -520,7 +543,6 @@ button, a, input, select, textarea, label, summary {
   .grid-kpi { gap: var(--sp-2); }
   .kpi { padding: var(--sp-3); }
   .kpi-value { font-size: var(--fs-lg); }
-  .picker-grid { grid-template-columns: minmax(0, 1fr); }
   .modal-foot { flex-wrap: wrap; }
   .modal-foot .btn { flex: 1 1 auto; }
 }

@@ -502,7 +502,12 @@ export function mount(host, ctx) {
         {
           label: o.priority ? 'Tirar urgência' : 'Marcar urgente',
           icon: 'flag',
-          onSelect: async () => { await Store.patch(o.id, { priority: !o.priority }); renderAll(); },
+          onSelect: async () => {
+            try {
+              await Store.patch(o.id, { priority: !o.priority });
+              renderAll();
+            } catch (err) { toastError('Não foi possível alterar a urgência', err.message); }
+          },
         },
         {
           label: 'Excluir', icon: 'trash', danger: true, separatorBefore: true,
@@ -513,9 +518,11 @@ export function mount(host, ctx) {
               confirmText: 'Excluir', danger: true,
             });
             if (!ok) return;
-            await Store.remove(o.id);
-            toast('Pedido excluído');
-            renderAll();
+            try {
+              await Store.remove(o.id);
+              toast('Pedido excluído');
+              renderAll();
+            } catch (err) { toastError('Não foi possível excluir', err.message); }
           },
         },
       ]);

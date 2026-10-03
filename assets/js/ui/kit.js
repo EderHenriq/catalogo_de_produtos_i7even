@@ -7,14 +7,33 @@ import { esc } from '../core/utils.js';
 
 let toastHost = null;
 
-function ensureToastHost() {
+/** O modal aberto mais recente (o que está na frente), ou null. */
+function topDialog() {
+  const open = document.querySelectorAll('dialog.modal[open]');
+  return open.length ? open[open.length - 1] : null;
+}
+
+/**
+ * Um <dialog> aberto vive na "camada de cima" do navegador, acima de
+ * qualquer z-index. Com o aviso preso no <body>, todo erro e validação
+ * mostrados com um modal aberto ficavam escondidos atrás dele - no celular,
+ * onde o modal ocupa a tela toda, o botão "Criar pedido" parecia não fazer
+ * nada. Por isso a pilha de avisos mora dentro do modal da frente.
+ */
+function ensureToastHost(exclude = null) {
   if (!toastHost) {
     toastHost = document.createElement('div');
     toastHost.className = 'toasts';
     toastHost.setAttribute('role', 'status');
     toastHost.setAttribute('aria-live', 'polite');
-    document.body.appendChild(toastHost);
   }
+  let parent = topDialog();
+  if (parent === exclude) {
+    const open = [...document.querySelectorAll('dialog.modal[open]')].filter((d) => d !== exclude);
+    parent = open.at(-1) || null;
+  }
+  parent = parent || document.body;
+  if (toastHost.parentElement !== parent) parent.appendChild(toastHost);
   return toastHost;
 }
 
@@ -52,13 +71,19 @@ const TOUCH = window.matchMedia('(hover: none) and (pointer: coarse)');
 
 /**
  * @param {{title: string, subtitle?: string, body: string, footer?: string,
- *          size?: 'sm'|'lg'|'xl', onMount?: (panel: HTMLElement, api: object) => void,
+ *          size?: 'sm'|'lg'|'xl', sheet?: boolean,
+ *          onMount?: (panel: HTMLElement, api: object) => void,
+ *          beforeClose?: () => boolean | Promise<boolean>,
  *          onClose?: () => void}} spec
+ *   sheet: no celular abre como folha que sobe de baixo (sem cobrir a tela
+ *          toda), deixando a tela de trás à vista.
+ *   beforeClose: chamado quando a pessoa tenta fechar (X, Cancelar, Esc,
+ *          toque fora). Devolver false mantém o modal aberto.
  */
 export function openModal(spec) {
   const dlg = document.createElement('dialog');
   dlg.className = 'modal';
-  const sizeClass = spec.size && spec.size !== 'sm' ? ` ${spec.size}` : '';
+  const sizeClass = (spec.size && spec.size !== 'sm' ? ` ${spec.size}` : '') + (spec.sheet ? ' sheet' : '');
 
   dlg.innerHTML = `
     <div class="modal-inner">
@@ -86,6 +111,9 @@ export function openModal(spec) {
     foot: dlg.querySelector('.modal-foot'),
     close(result) {
       if (!dlg.isConnected) return;
+      // Os avisos que estão na tela (ex.: "Pedido criado") não podem sumir
+      // junto com o modal: passam para o próximo da pilha (ou para a página).
+      if (toastHost && dlg.contains(toastHost)) ensureToastHost(dlg);
       dlg.close();
       dlg.remove();
       // Modal dentro de modal (ex.: editar item dentro do pedido): a página
@@ -94,15 +122,29 @@ export function openModal(spec) {
       if (!openModals) document.body.style.overflow = '';
       spec.onClose?.(result);
     },
+    /** Fechamento pedido pela pessoa: respeita o `beforeClose`. */
+    async requestClose() {
+      if (asking) return;
+      if (spec.beforeClose) {
+        asking = true;
+        try {
+          if (!(await spec.beforeClose())) return;
+        } finally {
+          asking = false;
+        }
+      }
+      api.close();
+    },
   };
+  let asking = false;
 
-  dlg.querySelectorAll('[data-close]').forEach((b) => b.addEventListener('click', () => api.close()));
+  dlg.querySelectorAll('[data-close]').forEach((b) => b.addEventListener('click', () => api.requestClose()));
 
   // Clique fora do painel fecha (mas não durante uma seleção de texto arrastada).
   dlg.addEventListener('mousedown', (e) => {
-    if (e.target === dlg || e.target.classList.contains('modal-inner')) api.close();
+    if (e.target === dlg || e.target.classList.contains('modal-inner')) api.requestClose();
   });
-  dlg.addEventListener('cancel', (e) => { e.preventDefault(); api.close(); });
+  dlg.addEventListener('cancel', (e) => { e.preventDefault(); api.requestClose(); });
 
   // Nos diálogos curtos (pagamento, item, senha), "OK"/"Ir" do teclado confirma.
   dlg.addEventListener('keydown', (e) => {
@@ -114,6 +156,8 @@ export function openModal(spec) {
   });
 
   dlg.showModal();
+  // Aviso que já estava na tela continua visível por cima do modal novo.
+  if (toastHost?.childElementCount) ensureToastHost();
   spec.onMount?.(api.panel, api);
 
   // Foco no primeiro campo útil. Na tela de toque não: o teclado subiria

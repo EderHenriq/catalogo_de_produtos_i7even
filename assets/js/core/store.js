@@ -327,7 +327,9 @@ export async function create(order) {
     .single();
   if (error) throw error;
   const saved = fromRow(data);
-  orders = [saved, ...orders];
+  // O aviso do realtime às vezes chega antes da resposta do insert e já pôs
+  // o pedido na lista: sem o filtro, ele aparecia duas vezes.
+  orders = [saved, ...orders.filter((o) => o.id !== saved.id)];
   emit();
   return saved;
 }
@@ -397,8 +399,12 @@ export function startRealtime() {
         orders = orders.filter((o) => o.id !== payload.old.id);
       } else {
         const row = fromRow(payload.new);
-        const exists = orders.some((o) => o.id === row.id);
-        orders = exists ? orders.map((o) => (o.id === row.id ? row : o)) : [row, ...orders];
+        const current = orders.find((o) => o.id === row.id);
+        // Aviso atrasado de uma versão antiga (duas gravações seguidas): se
+        // entrasse, o próximo salvamento usaria a versão velha e cairia na
+        // trava de "alterado em outro aparelho" sem ninguém ter mexido.
+        if (current && Date.parse(current.updatedAt) > Date.parse(row.updatedAt)) return;
+        orders = current ? orders.map((o) => (o.id === row.id ? row : o)) : [row, ...orders];
       }
       emit();
     })

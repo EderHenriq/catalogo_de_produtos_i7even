@@ -57,7 +57,17 @@ export function initInputs() {
   // nesse primeiro soltar, para o usuário ainda poder posicionar o cursor.
   document.addEventListener('mouseup', (e) => {
     if (e.target === justFocused) e.preventDefault();
+  });
+
+  // No toque, o cursor é posicionado DEPOIS do foco (o setTimeout acima
+  // perde a corrida) e o primeiro dígito entrava no meio do valor antigo:
+  // 4.600,00 virava 5.460.000,00. O click chega por último - seleciona de novo.
+  document.addEventListener('click', (e) => {
+    if (e.target === justFocused) selectAll(e.target);
     justFocused = null;
+  }, true);
+  document.addEventListener('focusout', (e) => {
+    if (e.target === justFocused) justFocused = null;
   });
 }
 
