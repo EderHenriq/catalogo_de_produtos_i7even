@@ -935,3 +935,6 @@ details.fieldset > summary:hover { color: var(--text); }
   padding-top: 7px;
   border-top: 1px solid var(--border);
 }
+.segmented button .icon { width: 14px; height: 14px; vertical-align: -2px; }
+/* explicação ao lado do título da seção: texto normal (não a fonte de código em caixa alta) */
+.fieldset-title > .dim { font-family: var(--font); font-size: var(--fs-xs); font-weight: 400; text-transform: none; letter-spacing: 0; color: var(--text-3); }

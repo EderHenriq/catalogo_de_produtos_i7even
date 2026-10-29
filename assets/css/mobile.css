@@ -609,3 +609,15 @@ button, a, input, select, textarea, label, summary {
 @media (max-width: 400px) {
   .modal-foot [data-wa-summary] span, .modal-foot [data-pdf] span { display: none; }
 }
+
+/* ===================================================================== */
+/*  Ajustes de leitura no celular                                         */
+/* ===================================================================== */
+@media (max-width: 860px) {
+  /* o título da tela já está na barra de cima */
+  .section-head h2.is-dup-title { display: none; }
+  /* o botão "+" (novo pedido) flutua sobre a lista: o fim dela sobe acima dele */
+  .content { padding-bottom: calc(var(--tabbar-h) + var(--safe-b) + 92px); }
+  /* chave do catálogo ao lado do texto, não embaixo */
+  .catalog-status-head { flex-wrap: nowrap; align-items: flex-start; }
+}

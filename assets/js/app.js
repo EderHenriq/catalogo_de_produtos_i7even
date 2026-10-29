@@ -27,6 +27,7 @@ import * as Purchases from './ui/purchases.js';
 import * as Customers from './ui/customers.js';
 import * as Categories from './ui/categories.js';
 import * as CatalogAdmin from './ui/catalog-admin.js';
+import * as Vitrine from './ui/vitrine.js';
 import * as Reports from './ui/reports.js';
 import * as Settings from './ui/settings.js';
 import * as Receivables from './ui/receivables.js';
@@ -48,6 +49,7 @@ const ROUTES = [
   { id: 'produtos',   label: 'Produtos',   icon: 'box',       module: Products,     group: 'Estoque', search: true },
   { id: 'entradas',   label: 'Entradas',   icon: 'truck',     module: Purchases,    group: 'Estoque' },
   { id: 'catalogo',   label: 'Catálogo',   icon: 'store',     module: CatalogAdmin, group: 'Gestão',  tab: true },
+  { id: 'vitrine',    label: 'Vitrine',    icon: 'image',     module: Vitrine,      group: 'Gestão',  search: true },
   { id: 'categorias', label: 'Categorias', icon: 'grid',      module: Categories,   group: 'Gestão' },
   { id: 'relatorios', label: 'Relatórios', icon: 'chart',     module: Reports,      group: 'Gestão' },
   { id: 'ajustes',    label: 'Ajustes',    icon: 'settings',  module: Settings,     group: '' },
@@ -315,6 +317,7 @@ const SEARCH_HINT = {
   clientes: 'Buscar cliente ou telefone…',
   produtos: 'Buscar modelo, IMEI, código…',
   estoque: 'Buscar modelo, cor, IMEI…',
+  vitrine: 'Buscar modelo ou cor…',
 };
 
 function newOrder() {
@@ -502,6 +505,11 @@ function route(id, params = {}) {
 
   if (pendingSearch !== null && found.search) applyPendingSearch();
   else if (found.search && $search.value) current.onSearch?.($search.value);
+
+  // No celular o título já está na barra de cima: o mesmo título repetido
+  // no topo da tela some (fica a contagem e os botões).
+  const h2 = viewHost.querySelector('.section-head h2');
+  if (h2 && h2.textContent.trim() === found.label) h2.classList.add('is-dup-title');
 
   window.scrollTo({ top: 0, behavior: 'instant' });
 }

@@ -56,10 +56,11 @@ export function mount(host, ctx) {
           <p class="small dim" data-count></p>
         </div>
         <div class="row gap-2 wrap">
-          <button class="btn" data-export>${icon('download')}<span class="hide-mobile">Exportar</span></button>
-          <button class="btn" data-olist title="Colar a lista do WhatsApp (pronta entrega ou encomenda)">${icon('copy')}<span class="hide-mobile">Lista do WhatsApp</span></button>
+          <button class="btn hide-mobile" data-export>${icon('download')}<span>Exportar</span></button>
+          <button class="btn hide-mobile" data-olist title="Colar a lista do WhatsApp (pronta entrega ou encomenda)">${icon('copy')}<span>Lista do WhatsApp</span></button>
           <button class="btn hide-mobile" data-photo-import title="Importar pasta de fotos (no computador)">${icon('image')}<span>Fotos</span></button>
-          <button class="btn" data-entry title="Entrada de mercadoria">${icon('truck')}<span class="hide-mobile">Entrada</span></button>
+          <button class="btn hide-mobile" data-entry title="Entrada de mercadoria">${icon('truck')}<span>Entrada</span></button>
+          <button class="btn only-mobile" data-more-actions>${icon('more')}<span>Mais</span></button>
           <button class="btn btn-primary" data-new-product>${icon('plus')} Produto</button>
         </div>
       </div>
@@ -255,6 +256,18 @@ export function mount(host, ctx) {
     }
     if (t.closest('[data-entry]')) { ctx.go?.('entradas'); setTimeout(() => import('./purchases.js').then((m) => m.openPurchaseForm({})), 50); return; }
     if (t.closest('[data-export]')) { exportProducts(); return; }
+    const more = t.closest('[data-more-actions]');
+    if (more) {
+      // celular: as mesmas ações dos botões do computador, com o nome escrito
+      const fire = (sel) => () => host.querySelector(sel)?.click();
+      openMenu(more, [
+        { label: 'Colar lista do WhatsApp', icon: 'copy', onSelect: fire('[data-olist]') },
+        { label: 'Entrada de mercadoria', icon: 'truck', onSelect: fire('[data-entry]') },
+        { label: 'Vitrine: fotos do catálogo', icon: 'image', onSelect: () => ctx.go?.('vitrine') },
+        { label: 'Exportar planilha', icon: 'download', onSelect: fire('[data-export]') },
+      ]);
+      return;
+    }
     const f = t.closest('[data-filter]');
     if (f) {
       st.filter = f.dataset.filter;
@@ -457,6 +470,7 @@ export function openProductSheet(productId) {
     const more = t.closest('[data-more]');
     if (more) {
       openMenu(more, [
+        { label: 'Vitrine: fotos e ordem', icon: 'image', onSelect: () => import('./vitrine.js').then((m) => m.openVitrineItem(p.id, { onDone: render })) },
         { label: 'Copiar link do catálogo', icon: 'link', onSelect: () => copyText(catalogUrl(p.id), 'Link copiado') },
         { label: p.showInCatalog ? 'Tirar do catálogo' : 'Mostrar no catálogo', icon: 'store',
           onSelect: () => Data.patchProducts([p.id], { showInCatalog: !p.showInCatalog }).then(render).catch((err) => toastError('Falhou', friendlyError(err))) },

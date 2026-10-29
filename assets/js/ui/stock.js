@@ -46,7 +46,7 @@ function stockItems() {
 /*  Lista                                                               */
 /* =================================================================== */
 
-export function mount(host) {
+export function mount(host, ctx) {
   const st = { q: '', filter: pref('stock.filter', 'todos'), cat: pref('stock.cat', '') };
 
   host.innerHTML = `
@@ -57,7 +57,9 @@ export function mount(host) {
           <p class="small dim" data-count></p>
         </div>
         <div class="row gap-2 wrap">
-          <button class="btn" data-olist title="Colar a lista do WhatsApp">${icon('copy')}<span class="hide-mobile">Lista do WhatsApp</span></button>
+          <button class="btn hide-mobile" data-olist title="Colar a lista do WhatsApp">${icon('copy')}<span>Lista do WhatsApp</span></button>
+          <button class="btn hide-mobile" data-go-vitrine title="O que aparece no catálogo e a ordem das fotos">${icon('image')}<span>Vitrine</span></button>
+          <button class="btn only-mobile" data-more-actions>${icon('more')}<span>Mais</span></button>
           <button class="btn btn-primary" data-add>${icon('plus')} Adicionar</button>
         </div>
       </div>
@@ -196,6 +198,16 @@ export function mount(host) {
     const t = e.target;
     if (t.closest('[data-add]')) { openQuickProduct({ mode: 'pronta', categoryId: st.cat || null, onDone: render }); return; }
     if (t.closest('[data-olist]')) { import('./order-list-import.js').then((m) => m.openOrderListImport({ onDone: render })); return; }
+    if (t.closest('[data-go-vitrine]')) { ctx?.go?.('vitrine'); return; }
+    const more = t.closest('[data-more-actions]');
+    if (more) {
+      openMenu(more, [
+        { label: 'Colar lista do WhatsApp', icon: 'copy', onSelect: () => host.querySelector('[data-olist]')?.click() },
+        { label: 'Vitrine: fotos do catálogo', icon: 'image', onSelect: () => ctx?.go?.('vitrine') },
+        { label: 'Todos os modelos (Produtos)', icon: 'box', onSelect: () => ctx?.go?.('produtos') },
+      ]);
+      return;
+    }
     const f = t.closest('[data-filter]') || t.closest('[data-go-filter]');
     if (f) {
       st.filter = f.dataset.filter || f.dataset.goFilter;
@@ -251,8 +263,9 @@ export function openStockItem(variantId, { onDone } = {}) {
     body: '<div data-item-sheet></div>',
     footer: `
       <button class="icon-btn" data-more aria-label="Mais ações">${icon('more')}</button>
+      <button class="btn" data-sell title="Abrir um pedido já com este item">${icon('orders')}<span>Vender</span></button>
       <span class="grow"></span>
-      <button class="btn btn-ghost" data-close>Cancelar</button>
+      <button class="btn btn-ghost hide-mobile" data-close>Cancelar</button>
       <button class="btn btn-primary" data-ok>${icon('check')} Salvar</button>`,
     beforeClose: async () => !dirty || confirmDialog({ title: 'Sair sem salvar?', message: 'As mudanças deste item ainda não foram salvas.', confirmText: 'Sair', cancelText: 'Continuar', danger: true }),
   });
@@ -353,6 +366,27 @@ export function openStockItem(variantId, { onDone } = {}) {
       dirty = true;
       renderQty();
     }
+  });
+
+  // Vender: o pedido já abre com este item (preço de venda e garantia da condição)
+  modal.foot.querySelector('[data-sell]').addEventListener('click', async () => {
+    if (dirty && !(await confirmDialog({ title: 'Vender sem salvar?', message: 'As mudanças deste item ainda não foram salvas.', confirmText: 'Vender assim', cancelText: 'Continuar', danger: true }))) return;
+    const v = Data.variant(v0.id) || v0;
+    const p = Data.product(p0.id) || p0;
+    const warranty = Data.settings().warrantyDays || {};
+    dirty = false;
+    modal.close();
+    const { openOrderForm } = await import('./order-form.js');
+    openOrderForm({
+      prefill: {
+        items: [Data.newItemDraft({
+          productId: p.id, categoryId: p.categoryId || '', variantId: v.id, productName: p.name,
+          variant: v.storage, color: v.color, size: v.size, condition: v.condition,
+          qty: 1, unitPrice: v.price, warrantyDays: Number(warranty[v.condition]) || 0,
+        })],
+      },
+      onSaved: () => onDone?.(),
+    });
   });
 
   modal.foot.querySelector('[data-more]').addEventListener('click', (e) => {

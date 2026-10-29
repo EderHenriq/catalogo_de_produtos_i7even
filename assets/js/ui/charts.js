@@ -64,8 +64,10 @@ export function lineChart(host, spec) {
     const plotW = Math.max(width - padL - padR, 40);
     const plotH = Math.max(height - padT - padB, 40);
 
-    const peak = Math.max(1, ...series.flatMap((s) => s.values.map((v) => Number(v) || 0)));
-    const top = niceMax(peak * 1.08);
+    const peak = Math.max(0, ...series.flatMap((s) => s.values.map((v) => Number(v) || 0)));
+    const empty = peak <= 0;
+    // topo nunca abaixo de 4: cada divisão vale pelo menos 1 (sem "2, 2, 1" repetido)
+    const top = Math.max(niceMax(peak * 1.08), 4);
     const n = labels.length;
 
     const x = (i) => padL + (n <= 1 ? plotW / 2 : (i / (n - 1)) * plotW);
@@ -122,7 +124,7 @@ export function lineChart(host, spec) {
            role="img" aria-label="${esc(state.ariaLabel || 'Gráfico de linha')}">
         <g class="chart-grid">${grid}</g>
         <g class="chart-axis">${yAxis}${xAxis}</g>
-        ${paths}
+        ${empty ? `<text class="chart-empty" x="${padL + plotW / 2}" y="${padT + plotH / 2}">Ainda sem vendas neste período</text>` : paths}
         <g class="chart-hover" hidden>
           <line class="chart-crosshair" y1="${padT}" y2="${padT + plotH}"/>
         </g>

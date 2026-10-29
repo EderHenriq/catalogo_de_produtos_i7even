@@ -87,7 +87,18 @@ r = await one(`select image_url from public.product_variants where id = $1`, [v.
 ok(!r.image_url, 'a foto presa na variação saiu (a da cor vale no catálogo)');
 await page.waitForTimeout(300);
 ok((await top().locator('[data-photos]').innerText()).includes('Fotos (2)'), 'ficha atualizada: Fotos (2)');
-await top().locator('.modal-foot [data-close]').tap();
+await top().locator('.modal-head [data-close]').tap();   // celular: fecha pelo X
+
+console.log('4b. Vender: o pedido já abre com o item');
+await page.waitForTimeout(300);
+await page.locator('[data-item]', { hasText: acc.name }).tap();
+await page.waitForSelector('[data-qty-input]');
+await top().locator('.modal-foot [data-sell]').tap();
+await page.waitForSelector('dialog.modal[open] [data-items]');
+const form = await top().innerText();
+ok(/Novo pedido/.test(form) && form.includes(acc.name), `"Novo pedido" com ${acc.name} já na lista`);
+await top().locator('.modal-head [data-close]').tap();
+await page.waitForTimeout(400);
 
 console.log('5. ficha do modelo: foto da cor abre o editor com todas');
 await page.evaluate(() => { location.hash = '#/produtos'; });

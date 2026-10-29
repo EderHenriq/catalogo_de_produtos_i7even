@@ -18,7 +18,7 @@ import { friendlyError } from '../core/errors.js';
 import { esc, money, formatDateTime, onlyDigits, maskPhone, waNumber, parseMoney, moneyInputValue } from '../core/utils.js';
 import { openModal, confirmDialog, toast, toastError, withLoading, emptyState } from './kit.js';
 import { icon } from './icons.js';
-import { productThumb, categoryThumb, catalogUrl, catalogCategoryUrl, moneyHTML, priceRangeHTML, matches } from './common.js';
+import { productThumb, categoryThumb, catalogUrl, catalogCategoryUrl, catalogShareText, moneyHTML, setPref } from './common.js';
 import { openOrderForm } from './order-form.js';
 import { openWhatsappDialog, copyText } from './doc-preview.js';
 import { openProductSheet } from './products.js';
@@ -30,7 +30,6 @@ const qrCache = { key: '', canvas: null, src: '' };
 
 export function mount(host, ctx) {
   let tab = Data.catalogRequests().some((r) => r.status === 'novo') ? 'pedidos' : 'divulgar';
-  let q = '';
   host.innerHTML = '<div class="view" data-root></div>';
   const root = host.querySelector('[data-root]');
 
@@ -66,8 +65,8 @@ export function mount(host, ctx) {
       </div>
 
       <div class="catalog-status card ${s.catalogEnabled ? 'is-open' : 'is-closed'}">
-        <div class="row-between wrap gap-3">
-          <div class="row gap-3">
+        <div class="row-between gap-3 catalog-status-head">
+          <div class="row gap-3" style="min-width:0">
             <span class="status-dot"></span>
             <div><div class="strong">${s.catalogEnabled ? 'Catálogo aberto' : 'Catálogo fechado'}</div>
               <div class="small dim">${s.catalogEnabled ? 'Qualquer pessoa com o link vê os produtos e pede pelo WhatsApp.' : 'Quem abrir o link vê só o WhatsApp da loja.'}</div></div>
@@ -75,8 +74,8 @@ export function mount(host, ctx) {
           <label class="switch"><input type="checkbox" data-toggle-open ${s.catalogEnabled ? 'checked' : ''}><span class="track"><span class="thumb"></span></span></label>
         </div>
         <div class="grid grid-kpi" style="margin-top:14px">
-          <div class="kpi"><div class="kpi-label">${icon('store')} Modelos à mostra</div><div class="kpi-value num">${st.shown}</div><div class="kpi-foot">${st.inStock} com estoque</div></div>
-          <div class="kpi"><div class="kpi-label">${icon('camera')} Sem foto</div><div class="kpi-value num ${st.noPhoto ? 'tone-amber' : ''}">${st.noPhoto}</div><div class="kpi-foot">vendem bem menos</div></div>
+          <button type="button" class="kpi kpi-btn" data-go-vitrine="mostra"><div class="kpi-label">${icon('store')} Modelos à mostra</div><div class="kpi-value num">${st.shown}</div><div class="kpi-foot">${st.inStock} com estoque · organizar a vitrine</div></button>
+          <button type="button" class="kpi kpi-btn" data-go-vitrine="semfoto"><div class="kpi-label">${icon('camera')} Sem foto</div><div class="kpi-value num ${st.noPhoto ? 'tone-amber' : ''}">${st.noPhoto}</div><div class="kpi-foot">vendem bem menos · pôr fotos</div></button>
           <div class="kpi"><div class="kpi-label">${icon('orders')} Pedidos em 30 dias</div><div class="kpi-value num">${st.reqs}</div><div class="kpi-foot">${st.converted} viraram pedido</div></div>
         </div>
       </div>
@@ -85,7 +84,7 @@ export function mount(host, ctx) {
         <button type="button" data-tab="pedidos" aria-pressed="${tab === 'pedidos'}">Pedidos${pending ? ` <span class="count accent">${pending}</span>` : ''}</button>
         <button type="button" data-tab="divulgar" aria-pressed="${tab === 'divulgar'}">Divulgar</button>
         <button type="button" data-tab="encomenda" aria-pressed="${tab === 'encomenda'}">Sob encomenda${Data.orderOffers().length ? ` <span class="count">${Data.orderOffers().length}</span>` : ''}</button>
-        <button type="button" data-tab="produtos" aria-pressed="${tab === 'produtos'}">Produtos à mostra</button>
+        <button type="button" data-go-vitrine="mostra">Vitrine e fotos ${icon('chevronRight')}</button>
         <button type="button" data-tab="regras" aria-pressed="${tab === 'regras'}">Regras</button>
       </div>
 
@@ -97,7 +96,6 @@ export function mount(host, ctx) {
     const body = root.querySelector('[data-tab-body]');
     if (tab === 'pedidos') body.innerHTML = requestsHTML();
     if (tab === 'divulgar') { body.innerHTML = shareHTML(); drawQR(); }
-    if (tab === 'produtos') body.innerHTML = productsHTML();
     if (tab === 'encomenda') body.innerHTML = offersHTML();
     if (tab === 'regras') body.innerHTML = rulesHTML();
   }
@@ -203,7 +201,7 @@ export function mount(host, ctx) {
   function messages(s, url) {
     const name = s.storeName;
     return {
-      whatsapp: `📱 *Catálogo ${name}*\niPhones lacrados e seminovos, Apple Watch, AirPods e mais - com preço atualizado e garantia.\n\nEscolha, monte a sacola e o pedido chega direto no nosso WhatsApp:\n${url}`,
+      whatsapp: catalogShareText(url),
       status: `Nosso catálogo está no ar ✨\nPreços atualizados, tudo com garantia.\nToque no link 👇\n${url}`,
       bio: `📱 iPhone · Watch · AirPods\n✅ Lacrados e seminovos com garantia\n🛍️ Catálogo: ${url}`,
     };
@@ -327,32 +325,6 @@ export function mount(host, ctx) {
     }).join('');
   }
 
-  /* --------------------------------------------------- produtos à mostra -- */
-
-  function productsHTML() {
-    const list = Data.products().filter((p) => p.active && matches(q, p.name, Data.category(p.categoryId)?.name))
-      .sort((a, b) => Number(b.showInCatalog) - Number(a.showInCatalog) || (Data.productStock(b.id) > 0) - (Data.productStock(a.id) > 0) || a.name.localeCompare(b.name, 'pt-BR'));
-    return `
-      <div class="row gap-2 wrap" style="margin-bottom:10px">
-        <label class="search grow">${icon('search')}<input class="input" type="search" data-q value="${esc(q)}" placeholder="Buscar modelo…"></label>
-      </div>
-      <div class="card mobile-list">
-        ${list.map((p) => {
-          const vs = Data.variantsOf(p.id).filter((v) => v.active && v.showInCatalog && (v.price > 0 || (v.onOrder && v.orderPrice > 0)));
-          const why = !vs.length ? 'sem variação com preço' : !p.imageUrl && !Object.keys(p.colorPhotos || {}).length ? 'sem foto' : '';
-          return `
-            <div class="m-row">
-              ${productThumb(p, 'sm')}
-              <button type="button" class="m-main link-like" data-open-product="${esc(p.id)}">
-                <span class="m-title">${esc(p.name)}</span>
-                <span class="m-sub">${vs.length ? priceRangeHTML(p.id) : ''} ${why ? `<span class="tone-amber">${esc(why)}</span>` : ''}</span>
-              </button>
-              <label class="switch" title="Aparece no catálogo"><input type="checkbox" data-show="${esc(p.id)}" ${p.showInCatalog ? 'checked' : ''}><span class="track"><span class="thumb"></span></span></label>
-            </div>`;
-        }).join('') || '<p class="small dim" style="padding:14px">Nenhum modelo.</p>'}
-      </div>`;
-  }
-
   /* ------------------------------------------------------------- regras -- */
 
   function rulesHTML() {
@@ -385,6 +357,8 @@ export function mount(host, ctx) {
 
   root.addEventListener('click', async (e) => {
     const t = e.target;
+    const gv = t.closest('[data-go-vitrine]');
+    if (gv) { setPref('vitrine.filter', gv.dataset.goVitrine); ctx.go?.('vitrine'); return; }
     const tb = t.closest('[data-tab]');
     if (tb) { tab = tb.dataset.tab; root.querySelectorAll('[data-tab]').forEach((b) => b.setAttribute('aria-pressed', String(b === tb))); renderTab(); return; }
     const cp = t.closest('[data-copy]');
@@ -455,10 +429,6 @@ export function mount(host, ctx) {
       try { await Data.setOrderPrice(v.id, price); toast('Valor de encomenda salvo', { duration: 1500 }); } catch (err) { toastError('Não foi possível', friendlyError(err)); opr.value = moneyInputValue(v.orderPrice); }
       return;
     }
-    const sh = e.target.closest('[data-show]');
-    if (sh) {
-      try { await Data.patchProducts([sh.dataset.show], { showInCatalog: sh.checked }); } catch (err) { toastError('Falhou', friendlyError(err)); sh.checked = !sh.checked; }
-    }
   });
 
   root.addEventListener('input', (e) => {
@@ -466,14 +436,6 @@ export function mount(host, ctx) {
       const f = e.target.form;
       f.querySelector('[data-inst-preview]').innerHTML = instPreview(Number(f.querySelector('[name="catalogInstallments"]').value), Number(String(e.target.value).replace(',', '.')) || 0);
       return;
-    }
-    if (e.target.matches('[data-q]')) {
-      q = e.target.value;
-      const pos = e.target.selectionStart;
-      renderTab();
-      const input = root.querySelector('[data-q]');
-      input?.focus();
-      try { input?.setSelectionRange(pos, pos); } catch { /* */ }
     }
   });
 

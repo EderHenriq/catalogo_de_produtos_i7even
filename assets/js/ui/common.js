@@ -89,6 +89,12 @@ export function catalogUrl(productId = '') {
 }
 
 /** Link do catálogo já aberto numa categoria ("manda só os iPhones"). */
+/** Texto pronto para mandar o catálogo no WhatsApp (Catálogo → Divulgar e atalho do Painel). */
+export function catalogShareText(url = catalogUrl()) {
+  const name = Data.settings().storeName;
+  return `📱 *Catálogo ${name}*\niPhones lacrados e seminovos, Apple Watch, AirPods e mais - com preço atualizado e garantia.\n\nEscolha, monte a sacola e o pedido chega direto no nosso WhatsApp:\n${url}`;
+}
+
 export function catalogCategoryUrl(categoryId) {
   return `${catalogUrl()}#c=${encodeURIComponent(categoryId)}`;
 }

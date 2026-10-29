@@ -9,6 +9,7 @@ import { openOrderDetail } from './order-detail.js';
 import { openOrderForm } from './order-form.js';
 import { emptyState } from './kit.js';
 import { icon } from './icons.js';
+import { catalogUrl, catalogShareText, setPref } from './common.js';
 import {
   esc, money, moneyCompact, relativeDate, daysSince, startOfMonth, addDays, startOfDay, toDate,
 } from '../core/utils.js';
@@ -135,7 +136,7 @@ export function mount(host, ctx) {
     const orders = Store.all();
 
     if (!orders.length) {
-      root.innerHTML = emptyState({
+      root.innerHTML = quickHTML() + emptyState({
         emoji: '👋',
         title: 'Tudo pronto para começar',
         text: 'Cadastre seu primeiro pedido - os números e gráficos aparecem automaticamente.',
@@ -162,6 +163,7 @@ export function mount(host, ctx) {
     const funnelMax = Math.max(1, ...Object.values(perStatus));
 
     root.innerHTML = `
+      ${quickHTML()}
       <div class="grid grid-kpi">
         ${kpi('Faturamento do mês', money(thisMonth.revenue), 'wallet',
               delta(thisMonth.revenue, lastMonth.revenue, 'vs. mês passado'), true)}
@@ -248,6 +250,17 @@ export function mount(host, ctx) {
     }
   }
 
+  /** Atalhos do dia a dia: o que mais se faz, a um toque. */
+  function quickHTML() {
+    return `
+      <nav class="quick-actions" aria-label="Atalhos">
+        <button type="button" class="qa is-primary" data-new>${icon('plus')}<span>Novo pedido</span></button>
+        <button type="button" class="qa" data-qa-stock>${icon('layers')}<span>Adicionar ao estoque</span></button>
+        <a class="qa" href="https://wa.me/?text=${encodeURIComponent(catalogShareText(catalogUrl()))}" target="_blank" rel="noopener">${icon('whatsapp')}<span>Mandar catálogo</span></a>
+        <button type="button" class="qa" data-go="vitrine">${icon('image')}<span>Vitrine</span></button>
+      </nav>`;
+  }
+
   /** Avisos que viram um toque: cada um leva para a tela que resolve. */
   function alertsHTML() {
     const reqs = Data.catalogRequests().filter((r) => r.status === 'novo').length;
@@ -255,6 +268,10 @@ export function mount(host, ctx) {
       it.variantId && Data.product(it.productId)?.tracksSerial && (it.unitIds || []).length < it.qty)).length;
     const low = Data.lowStock().length;
     const noPrice = Data.variants().filter((v) => v.active && v.stock > 0 && !(v.price > 0)).length;
+    // à mostra no catálogo (pronta entrega ou encomenda) e sem nenhuma foto
+    const sells = (v) => v.active && v.showInCatalog && ((v.stock > 0 && v.price > 0) || (v.onOrder && v.orderPrice > 0));
+    const noPhoto = Data.settings().catalogEnabled ? Data.products().filter((p) => p.active && p.showInCatalog
+      && !p.imageUrl && !Object.keys(p.colorPhotos || {}).length && Data.variantsOf(p.id).some(sells)).length : 0;
     const due = Data.receivablesSummary();
     const rows = [
       due.late.n && { go: 'receber', icon: 'alert', tone: 'red', text: `${due.late.n} ${due.late.n === 1 ? 'parcela atrasada' : 'parcelas atrasadas'} · ${money(due.late.sum)} para cobrar` },
@@ -262,11 +279,12 @@ export function mount(host, ctx) {
       reqs && { go: 'catalogo', icon: 'store', tone: 'accent', text: `${reqs} ${reqs === 1 ? 'pedido novo' : 'pedidos novos'} pelo catálogo` },
       noImei && { go: 'pedidos', icon: 'device', tone: 'amber', text: `${noImei} ${noImei === 1 ? 'pedido' : 'pedidos'} com aparelho sem IMEI escolhido (encomenda)` },
       low && { go: 'produtos', icon: 'alert', tone: 'amber', text: `${low} ${low === 1 ? 'variação' : 'variações'} com estoque no mínimo` },
-      noPrice && { go: 'produtos', icon: 'tag', tone: 'amber', text: `${noPrice} ${noPrice === 1 ? 'variação em estoque' : 'variações em estoque'} sem preço de venda` },
+      noPrice && { go: 'estoque', icon: 'tag', tone: 'amber', text: `${noPrice} ${noPrice === 1 ? 'item em estoque' : 'itens em estoque'} sem preço de venda` },
+      noPhoto && { go: 'vitrine', filter: 'semfoto', icon: 'camera', tone: 'amber', text: `${noPhoto} ${noPhoto === 1 ? 'produto aparece' : 'produtos aparecem'} no catálogo sem foto` },
     ].filter(Boolean);
     if (!rows.length) return '';
     return `<div class="alert-list">${rows.map((r) => `
-      <button type="button" class="banner-btn tone-${r.tone}" data-go="${r.go}">${icon(r.icon)}<span class="grow">${esc(r.text)}</span>${icon('chevronRight')}</button>`).join('')}</div>`;
+      <button type="button" class="banner-btn tone-${r.tone}" data-go="${r.go}" ${r.filter ? `data-vfilter="${r.filter}"` : ''}>${icon(r.icon)}<span class="grow">${esc(r.text)}</span>${icon('chevronRight')}</button>`).join('')}</div>`;
   }
 
   function attentionRow(o) {
@@ -303,7 +321,8 @@ export function mount(host, ctx) {
   root.addEventListener('click', (e) => {
     if (e.target.closest('[data-new]')) { openOrderForm({ onSaved: render }); return; }
     const go = e.target.closest('[data-go]');
-    if (go) { ctx.go?.(go.dataset.go); return; }
+    if (go) { if (go.dataset.vfilter) setPref('vitrine.filter', go.dataset.vfilter); ctx.go?.(go.dataset.go); return; }
+    if (e.target.closest('[data-qa-stock]')) { import('./quick-product.js').then((m) => m.openQuickProduct({ mode: 'pronta', onDone: render })); return; }
 
     const range = e.target.closest('[data-range]');
     if (range) { trendRange = range.dataset.range; render(); return; }

@@ -166,3 +166,6 @@
   .rank-fill, .funnel-fill { forced-color-adjust: none; }
   .chart-line { stroke: CanvasText; }
 }
+
+/* período sem venda: aviso no meio do gráfico, em vez de linha no zero */
+.chart-empty { text-anchor: middle; dominant-baseline: middle; fill: var(--text-3); font: 500 13px var(--font); }

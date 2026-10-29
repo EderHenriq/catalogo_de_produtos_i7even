@@ -19,7 +19,14 @@
   background: var(--surface);
   border-right: 1px solid var(--divider);
   z-index: 40;
+  /* Menu maior que a tela (celular deitado, notebook baixo): rola por
+     dentro, sem arrastar a página de trás. */
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: thin;
 }
+.sidebar > * { flex-shrink: 0; }
 
 .brand {
   display: flex;
@@ -187,6 +194,8 @@
 }
 
 .view { display: flex; flex-direction: column; gap: var(--sp-5); animation: rise var(--t-base) both; }
+/* Caixa ainda vazia (avisos, pedidos do catálogo, seleção) não abre espaço. */
+.view > :empty { display: none; }
 
 .section-head {
   display: flex;

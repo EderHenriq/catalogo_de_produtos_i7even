@@ -31,7 +31,14 @@ await page.waitForSelector('.app');
 console.log('1. lista real da loja → pronta entrega');
 await page.evaluate(() => { location.hash = '#/produtos'; });
 await page.waitForTimeout(300);
-await tap(page.locator('[data-olist]'));
+// celular: "Colar lista do WhatsApp" fica no botão Mais (com o nome escrito)
+if (DEVICE === 'Desktop') await tap(page.locator('[data-olist]'));
+else {
+  await tap(page.locator('[data-more-actions]'));
+  await page.waitForSelector('.menu');
+  await page.waitForTimeout(350);   // o menu termina de abrir
+  await tap(page.locator('.menu button', { hasText: 'Colar lista do WhatsApp' }));
+}
 await page.waitForSelector('#ol-text');
 ok(await top().locator('[data-mode="pronta"][aria-checked="true"]').count() === 1, 'abre em "Pronta entrega"');
 await top().locator('#ol-text').fill(LIST);
