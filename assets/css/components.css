@@ -542,13 +542,17 @@ dialog.modal > .toasts { position: fixed; }
 /* ------------------------------------------------------------ fieldset  */
 
 .form-grid { display: grid; grid-template-columns: repeat(12, minmax(0, 1fr)); gap: var(--sp-4); }
+.form-grid > .span-1 { grid-column: span 1; }
 .form-grid > .span-2 { grid-column: span 2; }
 .form-grid > .span-3 { grid-column: span 3; }
 .form-grid > .span-4 { grid-column: span 4; }
 .form-grid > .span-5 { grid-column: span 5; }
 .form-grid > .span-6 { grid-column: span 6; }
+.form-grid > .span-7 { grid-column: span 7; }
 .form-grid > .span-8 { grid-column: span 8; }
 .form-grid > .span-9 { grid-column: span 9; }
+.form-grid > .span-10 { grid-column: span 10; }
+.form-grid > .span-11 { grid-column: span 11; }
 .form-grid > .span-12 { grid-column: span 12; }
 
 @media (max-width: 720px) {

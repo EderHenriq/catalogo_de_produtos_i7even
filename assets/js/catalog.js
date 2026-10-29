@@ -243,9 +243,11 @@ function renderShell() {
   const conds = COND_GROUPS.filter(([k]) => products.some((p) => (p.variants || []).some((v) => condKey(v) === k)));
   const hasEnc = products.some((p) => (p.variants || []).some(hasOrder));
   ROOT.innerHTML = `
-    <div class="cat-mini" aria-hidden="true">
+    <div class="cat-ambient" aria-hidden="true"><i></i><i></i><i></i></div>
+    <div class="cat-mini cat-glass" aria-hidden="true">
       <div class="cat-mini-inner">
         <span class="cat-avatar sm"></span><b class="grow">${esc(name)}</b>
+        <button type="button" class="cat-icon-btn" data-theme-toggle tabindex="-1" aria-label="${isDark() ? 'Modo claro' : 'Modo escuro'}">${themeIcon()}</button>
         <button type="button" class="cat-icon-btn" data-go-search tabindex="-1" aria-label="Buscar">${icon('search')}</button>
         <button type="button" class="cat-icon-btn" data-open-bag tabindex="-1" aria-label="Sacola">${icon('orders')}<span class="cat-bag-count" data-bag-count hidden>0</span></button>
       </div>
@@ -263,7 +265,10 @@ function renderShell() {
               ${ig ? `<span>${INSTAGRAM} @${esc(ig)}</span>` : ''}
             </div>
           </div>
-          <button type="button" class="cat-icon-btn on-dark" data-share-store aria-label="Compartilhar o catálogo">${icon('share')}</button>
+          <div class="cat-brand-tools">
+            <button type="button" class="cat-icon-btn on-dark" data-theme-toggle aria-label="${isDark() ? 'Modo claro' : 'Modo escuro'}">${themeIcon()}</button>
+            <button type="button" class="cat-icon-btn on-dark" data-share-store aria-label="Compartilhar o catálogo">${icon('share')}</button>
+          </div>
         </div>
         <div class="cat-actions">
           ${ig ? `<a class="cat-action" href="https://instagram.com/${esc(ig)}" target="_blank" rel="noopener">${INSTAGRAM} Instagram</a>` : ''}
@@ -273,7 +278,7 @@ function renderShell() {
     </header>
 
     ${hasEnc ? `
-      <div class="cat-avail-tabs" role="tablist" aria-label="Disponibilidade">
+      <div class="cat-avail-tabs" role="tablist" aria-label="Disponibilidade" style="--i:1">
         <button type="button" role="tab" class="cat-avail-tab" data-avail="todos" aria-selected="${st.avail === 'todos'}">
           <span class="cat-avail-ic">${icon('grid')}</span><span><b>Tudo</b><small>${products.length} modelos</small></span></button>
         <button type="button" role="tab" class="cat-avail-tab is-ready" data-avail="pronta" aria-selected="${st.avail === 'pronta'}">
@@ -352,6 +357,50 @@ function updatedText() {
   const d = new Date(st.data?.generated_at || Date.now());
   const today = new Date().toDateString() === d.toDateString();
   return today ? `hoje às ${d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}` : `em ${d.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })}`;
+}
+
+/* ------------------------------------------------- tema claro / escuro -- */
+
+const THEME_KEY = 'i7even.catalog.theme';
+const darkMQ = window.matchMedia('(prefers-color-scheme: dark)');
+const isDark = () => (document.documentElement.dataset.theme || (darkMQ.matches ? 'dark' : 'light')) === 'dark';
+const themeIcon = () => icon(isDark() ? 'sun' : 'moon');
+function toggleTheme() {
+  const next = isDark() ? 'light' : 'dark';
+  const apply = () => {
+    document.documentElement.dataset.theme = next;
+    writeJSON(THEME_KEY, next);
+    document.querySelector('meta[name="theme-color"]')?.setAttribute('content', next === 'dark' ? '#0e0f11' : '#ffffff');
+    ROOT.querySelectorAll('[data-theme-toggle]').forEach((b) => { b.innerHTML = themeIcon(); b.setAttribute('aria-label', next === 'dark' ? 'Modo claro' : 'Modo escuro'); });
+  };
+  // troca com um "fade" (View Transitions) onde o navegador sabe fazer
+  if (document.startViewTransition && !reduceMotion.matches) document.startViewTransition(apply); else apply();
+}
+
+/** Re-desenha a grade com uma transição suave entre os filtros. */
+function softRender(fn) {
+  if (document.startViewTransition && !reduceMotion.matches) document.startViewTransition(fn);
+  else fn();
+}
+
+/** O produto "voa" até a sacola (a foto encolhe até o botão). */
+function flyToBag(img) {
+  const target = [...ROOT.querySelectorAll('.cat-fab-bag:not([hidden]), .cat-mini.is-on [data-open-bag]')].find((x) => x.offsetParent) || ROOT.querySelector('.cat-fab-bag');
+  if (!img || !target || reduceMotion.matches) return;
+  const a = img.getBoundingClientRect();
+  const b = target.getBoundingClientRect();
+  if (!a.width || !b.width) return;
+  const ghost = img.cloneNode();
+  ghost.className = 'cat-fly';
+  Object.assign(ghost.style, { left: `${a.left}px`, top: `${a.top}px`, width: `${a.width}px`, height: `${a.height}px` });
+  document.body.appendChild(ghost);
+  const dx = b.left + b.width / 2 - (a.left + a.width / 2);
+  const dy = b.top + b.height / 2 - (a.top + a.height / 2);
+  ghost.animate([
+    { transform: 'translate(0,0) scale(1)', opacity: 1, borderRadius: '20px' },
+    { transform: `translate(${dx * 0.55}px, ${dy * 0.35 - 80}px) scale(.45)`, opacity: 1, borderRadius: '40px', offset: 0.55 },
+    { transform: `translate(${dx}px, ${dy}px) scale(.08)`, opacity: 0.2, borderRadius: '50%' },
+  ], { duration: 720, easing: 'cubic-bezier(.5,0,.2,1)' }).onfinish = () => ghost.remove();
 }
 
 /** Prazo da encomenda que mais aparece ("7 a 15 dias"). */
@@ -667,7 +716,9 @@ function openProduct(id) {
       const k = bagKey(v.id, mode);
       st.bag[k] = Math.min((st.bag[k] || 0) + qty, 20);
       writeJSON(BAG_KEY, st.bag);
+      const photo = dlg.querySelectorAll('.cat-slide img')[photoIdx] || dlg.querySelector('.cat-slide img');
       updateBagButton(true);
+      requestAnimationFrame(() => flyToBag(photo));
       close();
       flash(`${vTitle(p, v)} na sacola${mode === 'encomenda' ? ' (encomenda)' : ''}`);
       return;
@@ -940,15 +991,16 @@ ROOT.addEventListener('click', (e) => {
     st.cat = st.cat === c.dataset.cat ? '' : c.dataset.cat;
     history.replaceState(null, '', st.cat ? `#c=${encodeURIComponent(st.cat)}` : location.pathname);
     renderCats();
-    renderGrid();
+    softRender(renderGrid);
     return;
   }
+  if (t.closest('[data-theme-toggle]')) { toggleTheme(); return; }
   const cond = t.closest('[data-cond]');
   if (cond) {
     st.cond = cond.dataset.cond;
     savePrefs();
     ROOT.querySelectorAll('[data-cond]').forEach((b) => b.setAttribute('aria-pressed', String(b === cond)));
-    renderGrid();
+    softRender(renderGrid);
     return;
   }
   const av = t.closest('[data-avail]');
@@ -957,7 +1009,7 @@ ROOT.addEventListener('click', (e) => {
     st.avail = av.dataset.avail;
     savePrefs();
     ROOT.querySelectorAll('[data-avail]').forEach((b) => b.setAttribute('aria-selected', String(b.dataset.avail === st.avail)));
-    renderGrid();
+    softRender(renderGrid);
     updateBagButton();
     return;
   }
@@ -966,7 +1018,7 @@ ROOT.addEventListener('click', (e) => {
     st.view = vw.dataset.view;
     savePrefs();
     ROOT.querySelectorAll('[data-view]').forEach((b) => b.setAttribute('aria-pressed', String(b === vw)));
-    renderGrid();
+    softRender(renderGrid);
     return;
   }
   if (t.closest('[data-go-search]')) {
@@ -982,6 +1034,16 @@ ROOT.addEventListener('click', (e) => {
     else navigator.clipboard?.writeText(url).then(() => flash('Link do catálogo copiado')).catch(() => {});
   }
 });
+// Brilho que segue o cursor no cartão (computador): luz de vitrine.
+if (window.matchMedia('(hover: hover) and (pointer: fine)').matches) {
+  ROOT.addEventListener('pointermove', (e) => {
+    const card = e.target.closest?.('.cat-card');
+    if (!card) return;
+    const r = card.getBoundingClientRect();
+    card.style.setProperty('--mx', `${((e.clientX - r.left) / r.width) * 100}%`);
+    card.style.setProperty('--my', `${((e.clientY - r.top) / r.height) * 100}%`);
+  }, { passive: true });
+}
 ROOT.addEventListener('input', (e) => {
   if (e.target.matches('[data-q]')) { st.q = e.target.value; renderGrid(); }
 });

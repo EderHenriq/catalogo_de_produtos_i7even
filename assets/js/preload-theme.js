@@ -6,7 +6,9 @@
  * segurança do site proíbe script embutido.
  */
 try {
-  var theme = localStorage.getItem('i7even.theme');
+  // no catálogo vale a escolha do cliente (botão sol/lua); no sistema, a da loja
+  var catalog = /catalogo\.html/.test(location.pathname);
+  var theme = catalog ? JSON.parse(localStorage.getItem('i7even.catalog.theme') || 'null') : localStorage.getItem('i7even.theme');
   if (theme === 'dark' || theme === 'light') {
     document.documentElement.setAttribute('data-theme', theme);
   }
