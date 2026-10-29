@@ -120,6 +120,19 @@ for (const device of ['iPhone 13', 'Desktop']) {
   ok(src === firstColorChanged.img, 'escolheu a cor (sob encomenda): a foto da cor aparece');
   ok((await page.locator('.cat-sheet[open]').innerText()).includes('12x de'), 'ficha mostra o parcelamento');
   await page.screenshot({ path: `${SHOTS}vitrine-${tag}-4-ficha.png` });
+  await page.keyboard.press('Escape');
+  await page.waitForTimeout(400);
+  // categoria sem produto: aparece na faixa e mostra o aviso "em breve"
+  const empty = await page.evaluate(() => [...document.querySelectorAll('.cat-circle')].map((b) => b.dataset.cat));
+  ok(empty.length >= 3, `todas as categorias na faixa (${empty.length})`);
+  await tap(page.locator('.cat-circle', { hasText: 'Perfumes' }));
+  await page.waitForTimeout(500);
+  const soon = await page.locator('.cat-soon').innerText().catch(() => '');
+  ok(/Em breve: Perfumes/.test(soon) && /WhatsApp/.test(soon), 'categoria vazia: "Em breve" + perguntar no WhatsApp');
+  await page.screenshot({ path: `${SHOTS}vitrine-${tag}-5-vazia.png` });
+  await tap(page.locator('.cat-soon [data-cat=""]'));
+  await page.waitForTimeout(400);
+  ok(await page.locator('.cat-card').count() > 0, '"Ver todos os produtos" volta para a vitrine');
   ok(errors.length === 0, `sem erro de JS ${errors.join(' | ')}`);
   await browser.close();
 }

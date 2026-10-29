@@ -999,3 +999,9 @@ body.catalog { background: var(--cat-page); isolation: isolate; }
    o transparente e o retângulo branco aparece (ficha no celular). */
 .cat-photo, .cat-slide { background: var(--cat-photo-bg); isolation: isolate; }
 .cat-slide img { animation: none; }
+
+/* Categoria ainda vazia: aviso "em breve" com atalho para o WhatsApp */
+.cat-soon { display: flex; flex-direction: column; align-items: center; gap: 2px; max-width: 420px; margin: 0 auto; }
+.cat-soon-ic { width: 84px; height: 84px; margin-bottom: 10px; display: grid; place-items: center; border-radius: 26px; background: var(--cat-photo-bg); font-size: 38px; overflow: hidden; isolation: isolate; }
+.cat-soon-ic img { width: 100%; height: 100%; object-fit: contain; padding: 12%; mix-blend-mode: multiply; }
+.cat-soon .cat-btn + .cat-btn { margin-top: 8px; }

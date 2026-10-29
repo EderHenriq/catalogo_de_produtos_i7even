@@ -2333,8 +2333,8 @@ begin
                                                    'color_label', c.color_label, 'size_label', c.size_label)
                                 order by c.sort, c.name), '[]'::jsonb)
         from public.categories c
-       where c.active and exists (
-         select 1 from jsonb_array_elements(v_products) x where x ->> 'category_id' = c.id::text)),
+       -- todas as categorias ativas: a vazia aparece com um aviso no catálogo
+       where c.active),
     'products', v_products
   );
 end;

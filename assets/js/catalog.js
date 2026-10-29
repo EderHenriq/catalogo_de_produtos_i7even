@@ -539,6 +539,18 @@ function renderGrid() {
   requestAnimationFrame(() => reveal(grid));
   const list = filtered();
   ROOT.querySelector('[data-count]').textContent = `Exibindo ${list.length} ${list.length === 1 ? 'produto' : 'produtos'}`;
+  const cat0 = (st.data.categories || []).find((c) => c.id === st.cat);
+  // Categoria ainda sem nada no catálogo: aviso + pedir pelo WhatsApp
+  if (cat0 && !products.some((p) => p.category_id === cat0.id)) {
+    ROOT.querySelector('[data-count]').textContent = 'Em breve';
+    grid.innerHTML = `<div class="cat-none cat-soon">
+      <span class="cat-soon-ic" aria-hidden="true">${cat0.image ? `<img src="${esc(thumbUrl(cat0.image))}" alt="">` : esc(cat0.emoji || '📦')}</span>
+      <p><b>Em breve: ${esc(cat0.name)}</b></p>
+      <p>Ainda não temos ${esc(cat0.name)} no catálogo, mas conseguimos para você - muita coisa chega por encomenda.</p>
+      ${storeWa() ? `<a class="cat-btn cat-btn-wa" href="${esc(storeWa(`Olá! Vocês têm ${cat0.name}? Gostaria de saber modelos e valores.`))}" target="_blank" rel="noopener">${icon('whatsapp')} Perguntar no WhatsApp</a>` : ''}
+      <button type="button" class="cat-btn" data-cat="">Ver todos os produtos</button></div>`;
+    return;
+  }
   if (!list.length) {
     grid.innerHTML = `<div class="cat-none">
       <p><b>Nada encontrado</b></p><p>Tente outra busca, ou pergunte pra gente - muita coisa chega por encomenda.</p>

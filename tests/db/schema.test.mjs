@@ -427,6 +427,7 @@ await expectError(`select public.catalog_request($1::jsonb)`, /fechado/, 'fechad
 await as('authenticated', eder);
 await db.query(`update public.store_settings set catalog_enabled = true, phone = '44999990000', store_name = 'i7even Store'`);
 await db.query(`update public.product_variants set show_in_catalog = false where id = $1`, [vCapa.id]);
+const activeCats = (await one(`select count(*)::int n from public.categories where active`)).n;
 await as('anon');
 r = await one(`select public.public_catalog() c`);
 const prod = r.c.products.find((p) => p.name === 'iPhone 15');
@@ -434,7 +435,7 @@ ok(r.c.enabled && prod && prod.variants.length >= 2, `aberto: iPhone 15 com ${pr
 const json = JSON.stringify(r.c);
 ok(!/"cost"|"stock"|"serial"|"min_stock"|3903|350000000/.test(json), 'nunca sai custo, saldo exato nem IMEI');
 ok(!r.c.products.some((p) => p.name === 'Capa / Case'), 'variação escondida não aparece (e o modelo sem variação visível some)');
-ok(r.c.categories.every((c) => r.c.products.some((p) => p.category_id === c.id)), 'só categorias com produto');
+ok(r.c.categories.length === activeCats, `todas as categorias ativas (também as vazias): ${r.c.categories.length}`);
 const v128pub = prod.variants.find((v) => v.storage === '128GB');
 ok(v128pub.available === true && v128pub.last_units === true && n(v128pub.price) === 4499, 'variação disponível, "últimas unidades", preço do banco ' + JSON.stringify(v128pub));
 r = await one(`select public.catalog_request($1::jsonb) r`, [JSON.stringify({
