@@ -271,6 +271,8 @@ export function emptyState({ emoji = '📦', title, text = '', action = '' }) {
 
 /** Marca um botão como "carregando" enquanto uma promise roda. */
 export async function withLoading(button, task) {
+  // Sem botão (ex.: currentTarget que virou null depois de um await): só roda.
+  if (!button) return task();
   const original = button.innerHTML;
   button.disabled = true;
   button.classList.add('btn-loading');

@@ -1,17 +1,22 @@
 /** Lista de pedidos: filtros, seleção múltipla, ações em lote e exportação. */
 
 import * as Store from '../core/store.js';
+import * as Data from '../core/data.js';
+import { friendlyError } from '../core/errors.js';
 import { STATUSES, STATUS_MAP, NEXT_STATUS, CHANNELS } from '../core/constants.js';
 import { APP } from '../config.js';
 import { openOrderDetail, printOrder } from './order-detail.js';
 import { openOrderForm } from './order-form.js';
+import { changeStatus, advanceLabel, missing } from './status-flow.js';
+import { openPdfDialog, openWhatsappDialog } from './doc-preview.js';
+import { fromOrder } from '../docs/order-doc.js';
 import { openModal, toast, toastError, confirmDialog, emptyState, openMenu } from './kit.js';
 import { icon } from './icons.js';
 import {
   esc, money, formatDate, relativeDate, daysSince, toCSV, downloadFile,
   startOfDay, startOfMonth, addDays, toDate, todayISO, isMobile, onLayoutChange,
 } from '../core/utils.js';
-import { normalize } from '../data/catalog.js';
+import { norm as normalize } from './common.js';
 
 /** Quantos pedidos desenhar de cada vez. O resto vem no "Mostrar mais". */
 const PAGE = 60;
@@ -98,6 +103,7 @@ function sortOrders(list) {
 export function mount(host, ctx) {
   host.innerHTML = `
     <div class="view">
+      <div data-requests></div>
       <div class="filters no-print" data-filters></div>
       <div data-list></div>
       <div data-bulk></div>
@@ -300,7 +306,7 @@ export function mount(host, ctx) {
           <div class="row gap-1">
             ${NEXT_STATUS[o.status]
               ? `<button class="icon-btn sm" data-advance="${esc(o.id)}"
-                   title="Avançar para ${esc(STATUS_MAP[NEXT_STATUS[o.status]].label)}">${icon('chevronRight')}</button>`
+                   title="${esc(advanceLabel(o, NEXT_STATUS[o.status]).text === 'Receber' ? `Receber ${money(missing(o))}` : `Avançar para ${STATUS_MAP[NEXT_STATUS[o.status]].label}`)}">${icon(advanceLabel(o, NEXT_STATUS[o.status]).text === 'Receber' ? 'cash' : 'chevronRight')}</button>`
               : ''}
             <button class="icon-btn sm" data-menu="${esc(o.id)}" aria-label="Mais ações">${icon('more')}</button>
           </div>
@@ -328,8 +334,10 @@ export function mount(host, ctx) {
         <div class="row-between">
           <span class="strong mono money-sensitive">${esc(money(o.total))}</span>
           ${NEXT_STATUS[o.status]
-            ? `<button class="btn btn-sm" data-advance="${esc(o.id)}">
-                 ${esc(STATUS_MAP[NEXT_STATUS[o.status]].short)} ${icon('chevronRight')}</button>`
+            ? (advanceLabel(o, NEXT_STATUS[o.status]).text === 'Receber'
+              ? `<button class="btn btn-sm" data-advance="${esc(o.id)}">${icon('cash')} Receber</button>`
+              : `<button class="btn btn-sm" data-advance="${esc(o.id)}">
+                 ${esc(STATUS_MAP[NEXT_STATUS[o.status]].short)} ${icon('chevronRight')}</button>`)
             : ''}
         </div>
       </div>`;
@@ -356,7 +364,21 @@ export function mount(host, ctx) {
       </div>`;
   }
 
+  /** Pedidos novos do catálogo: aviso no topo, com atalho para a tela do Catálogo. */
+  function renderRequests() {
+    const box = host.querySelector('[data-requests]');
+    const n = Data.catalogRequests().filter((r) => r.status === 'novo').length;
+    box.innerHTML = n ? `
+      <button type="button" class="banner-btn" data-go-requests>
+        ${icon('store')}
+        <span class="grow"><b>${n} ${n === 1 ? 'pedido chegou' : 'pedidos chegaram'} pelo catálogo</b>
+          <span class="xs dim block">Toque para ver e transformar em pedido com um toque</span></span>
+        ${icon('chevronRight')}
+      </button>` : '';
+  }
+
   function renderAll() {
+    renderRequests();
     renderFilters();
     renderList();
     renderBulk();
@@ -451,6 +473,10 @@ export function mount(host, ctx) {
     }
   });
 
+  host.querySelector('[data-requests]').addEventListener('click', (e) => {
+    if (e.target.closest('[data-go-requests]')) ctx.go?.('catalogo');
+  });
+
   $list.addEventListener('click', async (e) => {
     if (e.target.closest('[data-new]')) { openOrderForm({ onSaved: renderAll }); return; }
     if (e.target.closest('[data-more]')) { shown += PAGE; renderList(); return; }
@@ -483,11 +509,7 @@ export function mount(host, ctx) {
       const o = Store.byId(adv.dataset.advance);
       const next = NEXT_STATUS[o?.status];
       if (!next) return;
-      try {
-        await Store.setStatus(o.id, next);
-        toast(`#${String(o.code).padStart(4, '0')} → ${STATUS_MAP[next].label}`);
-        renderAll();
-      } catch (err) { toastError('Falhou ao mudar o status', err.message); }
+      if (await changeStatus(o.id, next)) renderAll();
       return;
     }
 
@@ -498,6 +520,8 @@ export function mount(host, ctx) {
       openMenu(menuBtn, [
         { label: 'Abrir detalhes', icon: 'receipt', onSelect: () => open(o.id) },
         { label: 'Editar', icon: 'edit', onSelect: () => openOrderForm({ order: o, onSaved: renderAll }) },
+        { label: 'PDF do pedido', icon: 'receipt', onSelect: () => openPdfDialog(fromOrder(o, Data.settings())) },
+        { label: 'Resumo no WhatsApp', icon: 'whatsapp', onSelect: () => openWhatsappDialog(fromOrder(o, Data.settings())) },
         { label: 'Imprimir', icon: 'print', onSelect: () => printOrder(o) },
         {
           label: o.priority ? 'Tirar urgência' : 'Marcar urgente',
@@ -506,7 +530,7 @@ export function mount(host, ctx) {
             try {
               await Store.patch(o.id, { priority: !o.priority });
               renderAll();
-            } catch (err) { toastError('Não foi possível alterar a urgência', err.message); }
+            } catch (err) { toastError('Não foi possível alterar a urgência', friendlyError(err)); }
           },
         },
         {
@@ -522,7 +546,7 @@ export function mount(host, ctx) {
               await Store.remove(o.id);
               toast('Pedido excluído');
               renderAll();
-            } catch (err) { toastError('Não foi possível excluir', err.message); }
+            } catch (err) { toastError('Não foi possível excluir', friendlyError(err)); }
           },
         },
       ]);
@@ -547,7 +571,7 @@ export function mount(host, ctx) {
         toast(`${selection.size} pedidos excluídos`);
         selection.clear();
         renderAll();
-      } catch (err) { toastError('Falhou ao excluir', err.message); }
+      } catch (err) { toastError('Falhou ao excluir', friendlyError(err)); }
       return;
     }
     if (e.target.closest('[data-bulk-status]')) bulkStatus();
@@ -563,13 +587,16 @@ export function mount(host, ctx) {
       const btn = e.target.closest('[data-to]');
       if (!btn) return;
       m.close();
-      const ids = [...selection];
+      const to = btn.dataset.to;
+      // "Pago"/"Finalizado" em lote só para quem quitou; o resto fica como está (avisa).
+      const ids = [...selection].filter((id) => !(['pago', 'entregue'].includes(to) && missing(Store.byId(id)) > 0));
+      const skipped = selection.size - ids.length;
       try {
-        for (const id of ids) await Store.setStatus(id, btn.dataset.to);
-        toast(`${ids.length} pedidos atualizados`);
+        for (const id of ids) await Store.setStatus(id, to);
+        toast(`${ids.length} pedidos atualizados`, skipped ? { text: `${skipped} com saldo a receber ficaram de fora - abra cada um para receber ou entregar no fiado.`, duration: 7000 } : {});
         selection.clear();
         renderAll();
-      } catch (err) { toastError('Falhou no meio do caminho', err.message); renderAll(); }
+      } catch (err) { toastError('Falhou no meio do caminho', friendlyError(err)); renderAll(); }
     });
   }
 
@@ -577,7 +604,10 @@ export function mount(host, ctx) {
     openOrderDetail(id, { onChanged: renderAll });
   }
 
-  const unsubscribe = Store.subscribe(() => renderList());
+  const unsubscribe = Store.subscribe((changed) => {
+    if (changed?.has?.('catalogRequests')) renderRequests();
+    if (!changed || changed.has('orders')) renderList();
+  });
   const offLayout = onLayoutChange(() => renderList());
 
   renderAll();

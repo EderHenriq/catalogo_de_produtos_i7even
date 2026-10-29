@@ -1,6 +1,7 @@
 /** Painel inicial: o resumo que responde "como está a loja hoje?". */
 
 import * as Store from '../core/store.js';
+import * as Data from '../core/data.js';
 import { STATUSES, STATUS_MAP } from '../core/constants.js';
 import { APP } from '../config.js';
 import { lineChart, legendHTML, chartTableHTML, rankBarsHTML } from './charts.js';
@@ -40,7 +41,7 @@ function inRange(order, from, to) {
 }
 
 function valid(list) {
-  return list.filter((o) => o.status !== 'cancelado');
+  return list.filter((o) => o.status !== 'cancelado' && o.status !== 'orcamento');
 }
 
 function summarize(list) {
@@ -226,12 +227,13 @@ export function mount(host, ctx) {
       <div class="card">
         <div class="card-head">
           <h3>Precisam de atenção</h3>
-          <span class="xs dim">urgentes ou parados há ${APP.staleDays}+ dias</span>
+          <span class="xs dim">catálogo, encomendas, estoque e pedidos parados</span>
         </div>
         <div class="card-body">
+          ${alertsHTML()}
           ${attention.length
             ? `<div class="order-cards">${attention.map(attentionRow).join('')}</div>`
-            : `<p class="small dim">Nada parado. Tudo em dia. 🎉</p>`}
+            : (alertsHTML() ? '' : '<p class="small dim">Nada parado. Tudo em dia. 🎉</p>')}
         </div>
       </div>`;
 
@@ -244,6 +246,27 @@ export function mount(host, ctx) {
         ariaLabel: 'Faturamento e lucro ao longo do tempo',
       });
     }
+  }
+
+  /** Avisos que viram um toque: cada um leva para a tela que resolve. */
+  function alertsHTML() {
+    const reqs = Data.catalogRequests().filter((r) => r.status === 'novo').length;
+    const noImei = Data.orders().filter((o) => STATUS_MAP[o.status]?.open && o.items.some((it) =>
+      it.variantId && Data.product(it.productId)?.tracksSerial && (it.unitIds || []).length < it.qty)).length;
+    const low = Data.lowStock().length;
+    const noPrice = Data.variants().filter((v) => v.active && v.stock > 0 && !(v.price > 0)).length;
+    const due = Data.receivablesSummary();
+    const rows = [
+      due.late.n && { go: 'receber', icon: 'alert', tone: 'red', text: `${due.late.n} ${due.late.n === 1 ? 'parcela atrasada' : 'parcelas atrasadas'} · ${money(due.late.sum)} para cobrar` },
+      due.today.n && { go: 'receber', icon: 'calendar', tone: 'amber', text: `${due.today.n} ${due.today.n === 1 ? 'parcela vence' : 'parcelas vencem'} hoje · ${money(due.today.sum)}` },
+      reqs && { go: 'catalogo', icon: 'store', tone: 'accent', text: `${reqs} ${reqs === 1 ? 'pedido novo' : 'pedidos novos'} pelo catálogo` },
+      noImei && { go: 'pedidos', icon: 'device', tone: 'amber', text: `${noImei} ${noImei === 1 ? 'pedido' : 'pedidos'} com aparelho sem IMEI escolhido (encomenda)` },
+      low && { go: 'produtos', icon: 'alert', tone: 'amber', text: `${low} ${low === 1 ? 'variação' : 'variações'} com estoque no mínimo` },
+      noPrice && { go: 'produtos', icon: 'tag', tone: 'amber', text: `${noPrice} ${noPrice === 1 ? 'variação em estoque' : 'variações em estoque'} sem preço de venda` },
+    ].filter(Boolean);
+    if (!rows.length) return '';
+    return `<div class="alert-list">${rows.map((r) => `
+      <button type="button" class="banner-btn tone-${r.tone}" data-go="${r.go}">${icon(r.icon)}<span class="grow">${esc(r.text)}</span>${icon('chevronRight')}</button>`).join('')}</div>`;
   }
 
   function attentionRow(o) {
@@ -279,6 +302,8 @@ export function mount(host, ctx) {
 
   root.addEventListener('click', (e) => {
     if (e.target.closest('[data-new]')) { openOrderForm({ onSaved: render }); return; }
+    const go = e.target.closest('[data-go]');
+    if (go) { ctx.go?.(go.dataset.go); return; }
 
     const range = e.target.closest('[data-range]');
     if (range) { trendRange = range.dataset.range; render(); return; }

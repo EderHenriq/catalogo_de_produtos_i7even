@@ -88,4 +88,14 @@ export const APP = {
   pageSize: 50,
   /** Dias sem movimentação para marcar um pedido aberto como "parado". */
   staleDays: 5,
+  /** Bucket do Supabase Storage para as fotos dos produtos (criado pelo schema.sql). */
+  photoBucket: 'produtos',
+  /** Versão do app (aparece em Ajustes e nos erros do Diagnóstico). */
+  version: '2.0.0',
+  /**
+   * Versão do banco que este app precisa (whoami().schema_version). Banco
+   * mais antigo = tela "rode o supabase/schema.sql" em vez de erro escondido.
+   * Subiu no schema.sql? Suba aqui junto.
+   */
+  schemaVersion: 2,
 };

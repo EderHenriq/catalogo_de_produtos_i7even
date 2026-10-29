@@ -1,33 +1,43 @@
 /**
- * Seletor de produtos - a tela que torna o cadastro rápido.
+ * Seletor de modelos - a grade que torna o cadastro rápido.
  *
- * Fluxo: escolhe a categoria → toca no modelo → abre a ficha do aparelho
- * (capacidade, cor, condição, quantidade, valor) → "Adicionar" lança o item
- * no pedido na hora e volta para a grade, pronta para o próximo.
+ * Categoria → toque no modelo → abre por cima a ficha que o fluxo precisa
+ * (no pedido: capacidade, cor, condição, aparelho e valor; na entrada: os
+ * IMEIs e o custo). A grade continua aberta para o próximo, e o número no
+ * cartão mostra quantos daquele modelo já estão no pedido/na nota.
  *
- * O mesmo modelo pode entrar quantas vezes precisar (ex.: dois iPhone 15 de
- * cores diferentes): cada toque abre uma ficha nova. O número no cartão
- * mostra quantos daquele modelo já estão no pedido.
+ * Os modelos vêm do cadastro (Produtos). Modelos com estoque aparecem
+ * primeiro; os desativados não aparecem.
  */
 
-import { CATALOG, FREE_CATEGORY, searchProducts } from '../data/catalog.js';
+import * as Data from '../core/data.js';
 import { openModal } from './kit.js';
-import { openItemEditor } from './item-editor.js';
 import { icon } from './icons.js';
 import { esc, money, debounce } from '../core/utils.js';
+import { matches, productThumb, priceRangeHTML } from './common.js';
+
+const FREE = { id: 'outro', name: 'Item avulso', emoji: '✏️' };
 
 /**
- * @param {{onAdd: (items: object[]) => void, items?: () => object[], defaultCategory?: string}} opts
- *   items: itens que já estão no pedido (para o contador dos cartões e o resumo).
+ * @param {{
+ *   title?: string, subtitle?: string, defaultCategory?: string,
+ *   allowFree?: boolean,                     // mostra "Item avulso" (pedido)
+ *   counts?: () => Map<string, number>,      // productId → quantas unidades já estão na lista
+ *   footer?: () => string,                   // resumo no rodapé (HTML)
+ *   onPick: (product: object|null, picker: object) => void,   // null = item avulso
+ * }} opts
  */
-export function openProductPicker({ onAdd, items = () => [], defaultCategory = 'iphone' }) {
-  let activeCat = CATALOG.some((c) => c.id === defaultCategory) ? defaultCategory : 'iphone';
+export function openProductPicker({
+  title = 'Adicionar itens', subtitle = 'Toque no modelo para escolher capacidade, cor e valor',
+  defaultCategory = '', allowFree = true, counts = () => new Map(), footer = () => '', onPick,
+}) {
+  const cats = Data.categories().filter((c) => c.active && Data.products().some((p) => p.active && p.categoryId === c.id));
+  let activeCat = cats.some((c) => c.id === defaultCategory) ? defaultCategory : (cats[0]?.id || '');
   let term = '';
-  let addedNow = 0;
 
   const modal = openModal({
-    title: 'Adicionar itens',
-    subtitle: 'Toque no modelo para escolher capacidade, cor e valor',
+    title,
+    subtitle,
     size: 'xl',
     body: `
       <div class="picker">
@@ -50,32 +60,80 @@ export function openProductPicker({ onAdd, items = () => [], defaultCategory = '
   const $grid = modal.panel.querySelector('[data-grid]');
   const $search = modal.panel.querySelector('[data-search]');
   const $count = modal.panel.querySelector('[data-count]');
-  const $done = modal.panel.querySelector('[data-done]');
-
-  /** Quantas unidades de cada modelo já estão no pedido. */
-  function countsByProduct() {
-    const map = new Map();
-    for (const it of items()) map.set(it.productId, (map.get(it.productId) || 0) + (Number(it.qty) || 1));
-    return map;
-  }
-
-  /* --------------------------------------------------------- categorias */
 
   function renderCats() {
-    const all = [...CATALOG, FREE_CATEGORY];
-    $cats.innerHTML = all
-      .map((c) => `
-        <button type="button" class="chip" data-cat="${esc(c.id)}"
-                aria-pressed="${!term && c.id === activeCat}">
-          <span aria-hidden="true">${c.emoji}</span>${esc(c.label)}
-        </button>`)
-      .join('');
+    $cats.innerHTML = [
+      ...cats.map((c) => `
+        <button type="button" class="chip" data-cat="${esc(c.id)}" aria-pressed="${!term && c.id === activeCat}">
+          <span aria-hidden="true">${esc(c.emoji || '')}</span>${esc(c.name)}
+        </button>`),
+      allowFree ? `<button type="button" class="chip" data-free><span aria-hidden="true">${FREE.emoji}</span>${FREE.name}</button>` : '',
+    ].join('');
   }
 
+  function list() {
+    const rank = Data.salesRank(90);
+    return Data.products()
+      .filter((p) => p.active && (term ? matches(term, p.name, p.brand, Data.category(p.categoryId)?.name) : (!activeCat || p.categoryId === activeCat)))
+      .sort((a, b) => (Data.productStock(b.id) > 0) - (Data.productStock(a.id) > 0)
+        || (rank.get(b.id) || 0) - (rank.get(a.id) || 0)
+        || Number(!!a.needsReview) - Number(!!b.needsReview)
+        || (b.year || 0) - (a.year || 0)
+        || a.name.localeCompare(b.name, 'pt-BR'));
+  }
+
+  function renderGrid() {
+    const items = list();
+    if (!items.length) {
+      $grid.innerHTML = `
+        <div class="picker-empty">
+          <p class="small dim">${Data.products().length ? 'Nenhum modelo encontrado.' : 'Nenhum modelo cadastrado ainda (Produtos → Modelo).'}</p>
+          ${allowFree ? `<button type="button" class="btn btn-outline btn-sm" data-free>${icon('edit')} Lançar como item avulso</button>` : ''}
+        </div>`;
+      return;
+    }
+    const n = counts();
+    $grid.innerHTML = items.map((p) => {
+      const qty = n.get(p.id) || 0;
+      const stock = Data.productStock(p.id);
+      const hasVariants = Data.variantsOf(p.id).some((v) => v.active);
+      return `
+        <button type="button" class="pick pick-product" data-product="${esc(p.id)}" aria-pressed="${qty > 0}">
+          ${qty ? `<span class="pick-count" aria-label="${qty} na lista">${qty}</span>` : ''}
+          ${productThumb(p, 'sm')}
+          <span class="pick-body">
+            <span class="pick-name">${esc(p.name)}${p.needsReview ? ' <span class="dim">· a confirmar</span>' : ''}</span>
+            <span class="pick-meta">
+              ${term ? `${esc(Data.category(p.categoryId)?.name || '')} · ` : ''}
+              ${stock > 0 ? `<span class="pos">${stock} em estoque</span>` : '<span class="dim">sem estoque</span>'}
+              ${hasVariants ? ` · ${priceRangeHTML(p.id)}` : ''}
+            </span>
+          </span>
+        </button>`;
+    }).join('');
+  }
+
+  function renderFooter() {
+    $count.innerHTML = footer() || '';
+  }
+
+  const api = {
+    modal,
+    refresh() {
+      renderGrid();
+      renderFooter();
+    },
+    /** Retorno discreto no cartão do modelo que acabou de entrar. */
+    bump(productId) {
+      $grid.querySelector(`[data-product="${CSS.escape(productId)}"] .pick-count`)?.classList.add('bump');
+    },
+    close: () => modal.close(),
+  };
+
   $cats.addEventListener('click', (e) => {
+    if (e.target.closest('[data-free]')) { onPick(null, api); return; }
     const btn = e.target.closest('[data-cat]');
     if (!btn) return;
-    if (btn.dataset.cat === FREE_CATEGORY.id) { configure(null); return; }
     activeCat = btn.dataset.cat;
     term = '';
     $search.value = '';
@@ -84,45 +142,10 @@ export function openProductPicker({ onAdd, items = () => [], defaultCategory = '
     $grid.scrollTop = 0;
   });
 
-  /* ------------------------------------------------------------- grade */
-
-  function renderGrid() {
-    // Lançados primeiro (os "a confirmar" vão para o fim) e, dentro disso,
-    // do mais novo para o mais antigo - é a ordem em que a loja mais vende.
-    const list = searchProducts(term, term ? null : activeCat)
-      .sort((a, b) => Number(!!a.todo) - Number(!!b.todo)
-        || b.year - a.year
-        || a.name.localeCompare(b.name, 'pt-BR'));
-
-    if (!list.length) {
-      $grid.innerHTML = `
-        <div class="picker-empty">
-          <p class="small dim">Nenhum modelo encontrado.</p>
-          <button type="button" class="btn btn-outline btn-sm" data-free>${icon('edit')} Lançar como item avulso</button>
-        </div>`;
-      return;
-    }
-
-    const counts = countsByProduct();
-    $grid.innerHTML = list
-      .map((p) => {
-        const n = counts.get(p.id) || 0;
-        const meta = [p.storages?.[0], p.storages?.length > 1 ? `+${p.storages.length - 1}` : '']
-          .filter(Boolean).join(' ');
-        return `
-          <button type="button" class="pick" data-product="${esc(p.id)}" aria-pressed="${n > 0}">
-            ${n ? `<span class="pick-count" aria-label="${n} no pedido">${n}</span>` : ''}
-            <span class="pick-name">${esc(p.name)}${p.todo ? ' <span class="dim">· a confirmar</span>' : ''}</span>
-            <span class="pick-meta">${esc(term ? p.category.label : '')}${term ? ' · ' : ''}${esc(meta || '-')}</span>
-          </button>`;
-      })
-      .join('');
-  }
-
   $grid.addEventListener('click', (e) => {
-    if (e.target.closest('[data-free]')) { configure(null); return; }
+    if (e.target.closest('[data-free]')) { onPick(null, api); return; }
     const btn = e.target.closest('[data-product]');
-    if (btn) configure(btn.dataset.product);
+    if (btn) onPick(Data.product(btn.dataset.product), api);
   });
 
   $search.addEventListener('input', debounce((e) => {
@@ -131,38 +154,23 @@ export function openProductPicker({ onAdd, items = () => [], defaultCategory = '
     renderGrid();
   }, 160));
 
-  /* ----------------------------------------------------- ficha do item */
-
-  function configure(productId) {
-    openItemEditor({
-      productId,
-      onSave: (item) => {
-        addedNow += 1;
-        onAdd([item]);
-        renderGrid();
-        renderFooter();
-        // Retorno discreto no próprio cartão: um aviso por cima cobriria as
-        // categorias justo quando a pessoa vai tocar no próximo modelo.
-        $grid.querySelector(`[data-product="${CSS.escape(item.productId)}"] .pick-count`)?.classList.add('bump');
-      },
-    });
-  }
-
-  /* ------------------------------------------------------------ rodapé */
-
-  function renderFooter() {
-    const list = items();
-    const units = list.reduce((a, it) => a + (Number(it.qty) || 1), 0);
-    const total = list.reduce((a, it) => a + (Number(it.unitPrice) || 0) * (Number(it.qty) || 1), 0);
-    $count.innerHTML = list.length
-      ? `${units} ${units === 1 ? 'item' : 'itens'} no pedido · <span class="mono money-sensitive">${esc(money(total))}</span>`
-      : 'Nenhum item no pedido ainda';
-    $done.textContent = addedNow ? 'Concluir' : 'Fechar';
-  }
-
   renderCats();
-  renderGrid();
-  renderFooter();
+  api.refresh();
+  return api;
+}
 
-  return modal;
+/** Resumo padrão do rodapé: "3 itens · R$ 9.700,00". */
+export function itemsFooter(items) {
+  const units = items.reduce((a, it) => a + (Number(it.qty) || 1), 0);
+  const total = items.reduce((a, it) => a + (Number(it.unitPrice) || 0) * (Number(it.qty) || 1), 0);
+  return items.length
+    ? `${units} ${units === 1 ? 'item' : 'itens'} · <span class="mono money-sensitive">${esc(money(total))}</span>`
+    : 'Nenhum item ainda';
+}
+
+/** Quantas unidades de cada modelo já estão na lista. */
+export function countsByProduct(items) {
+  const map = new Map();
+  for (const it of items) if (it.productId) map.set(it.productId, (map.get(it.productId) || 0) + (Number(it.qty) || 1));
+  return map;
 }

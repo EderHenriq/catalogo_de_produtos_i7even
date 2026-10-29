@@ -3,7 +3,7 @@
 import * as Store from '../core/store.js';
 import { STATUS_MAP } from '../core/constants.js';
 import { lineChart, legendHTML, rankBarsHTML } from './charts.js';
-import { findProduct, findCategory } from '../data/catalog.js';
+import * as Data from '../core/data.js';
 import { toast, emptyState } from './kit.js';
 import { icon } from './icons.js';
 import {
@@ -47,12 +47,12 @@ function itemRows(orders) {
       const qty = Number(it.qty) || 1;
       const revenue = (Number(it.unitPrice) || 0) * qty;
       const cost = (Number(it.unitCost) || 0) * qty;
-      const cat = findCategory(it.categoryId) || findProduct(it.productId)?.category;
+      const cat = Data.category(it.categoryId) || Data.category(Data.product(it.productId)?.categoryId) || Data.categoryBySlug(it.categoryId);
       rows.push({
         order: o,
         item: it,
         name: it.productName || 'Item',
-        categoryLabel: cat?.label || 'Outros',
+        categoryLabel: cat?.name || 'Outros',
         variant: it.variant,
         color: it.color,
         qty,
@@ -90,7 +90,7 @@ export function mount(host) {
     const all = Store.all();
     const inPeriod = all.filter((o) => {
       const d = orderDay(o);
-      return d >= from && d < to && o.status !== 'cancelado';
+      return d >= from && d < to && o.status !== 'cancelado' && o.status !== 'orcamento';
     });
 
     const revenue = inPeriod.reduce((a, o) => a + o.total, 0);
@@ -321,7 +321,12 @@ export function mount(host) {
 
   root.addEventListener('click', (e) => {
     const p = e.target.closest('[data-period]');
-    if (p) { period = p.dataset.period; render(); }
+    if (p) {
+      period = p.dataset.period;
+      render();
+      // "Tudo" passa da janela de 12 meses carregada ao abrir: busca o resto.
+      if (period === 'tudo' && !Data.allOrdersLoaded()) Data.ensureAllOrders().then(render).catch(() => {});
+    }
   });
 
   const unsubscribe = Store.subscribe(() => render());

@@ -23,3 +23,14 @@ backup-i7even-*.json
 pedidos-i7even-*.csv
 itens-i7even-*.csv
 clientes-i7even-*.csv
+
+# Backups do banco (GitHub Actions) baixados para restaurar: dados de cliente
+*.gpg
+i7even-*.tar.gz
+0_estrutura.sql
+1_dados.sql
+2_login.sql
+
+# Testes: dependências e capturas de tela
+tests/node_modules/
+tests/out/

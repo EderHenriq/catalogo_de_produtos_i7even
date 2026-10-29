@@ -570,3 +570,42 @@ button, a, input, select, textarea, label, summary {
   .pay-summary { padding: var(--sp-4); }
   .pay-summary .totals-row { font-size: var(--fs-base); }
 }
+
+/* ===================================================================== */
+/*  14. Telas da v2 (produtos, aparelhos, fotos, entradas, catálogo)     */
+/* ===================================================================== */
+
+@media (max-width: 860px) {
+  .m-row { min-height: 64px; padding: 10px 8px; }
+  .m-title { font-size: var(--fs-base); }
+
+  .product-hero { flex-direction: column; align-items: stretch; gap: 14px; }
+  .hero-photo { width: 100%; max-width: 280px; margin: 0 auto; }
+  .hero-numbers { gap: 10px 18px; }
+
+  .variant-row { min-height: 60px; padding: 10px 12px; }
+  .v-price-input { width: 132px; }
+  .unit-row { padding: 10px 6px 10px 12px; }
+  .unit-option { min-height: 54px; }
+
+  .gallery-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+  .gallery-tools .icon-btn.sm { width: 34px; height: 34px; }
+  .photo-frame { max-width: none; }
+
+  .unit-form-row .field { flex: 1 1 calc(50% - 8px); }
+  .unit-form-row .field.grow-2 { flex: 1 1 100%; }
+  .purchase-line { padding: 12px; }
+
+  .banner-btn { min-height: 56px; font-size: var(--fs-base); }
+  .cat-row .cat-order .icon-btn.sm { width: 36px; height: 30px; }
+  .qr-box { width: 200px; }
+  .segmented.tabs button { min-height: var(--tap-sm); }
+  .request-card .btn-sm { flex: 1 1 auto; }
+
+  /* o rodapé dos modais da v2 tem 3-4 botões: ícone + texto curto */
+  .modal-foot [data-vedit] span, .modal-foot [data-edit] span { display: inline; }
+}
+
+@media (max-width: 400px) {
+  .modal-foot [data-wa-summary] span, .modal-foot [data-pdf] span { display: none; }
+}

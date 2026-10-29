@@ -199,20 +199,76 @@ export function onlyDigits(value = '') {
   return String(value).replace(/\D/g, '');
 }
 
+/**
+ * Número para o wa.me (com o 55 do Brasil). Regra pelo TAMANHO, não pelo
+ * começo: "(55) 99999-8888" (DDD 55, Santa Maria-RS) tem 11 dígitos e
+ * precisa do 55 na frente.
+ *   10-11 dígitos → DDD + número          → 55 + número
+ *   12-13 dígitos começando com 55        → já está completo
+ * Devolve '' se não der para montar.
+ */
+export function waNumber(phone) {
+  const d = onlyDigits(phone).replace(/^0+/, '');
+  if (d.length === 10 || d.length === 11) return `55${d}`;
+  if ((d.length === 12 || d.length === 13) && d.startsWith('55')) return d;
+  return '';
+}
+
 /** Link do WhatsApp a partir de um telefone brasileiro. */
 export function whatsappLink(phone, message = '') {
-  const d = onlyDigits(phone);
-  if (d.length < 10) return null;
-  const full = d.startsWith('55') ? d : `55${d}`;
+  const full = waNumber(phone);
+  if (!full) return null;
   const q = message ? `?text=${encodeURIComponent(message)}` : '';
   return `https://wa.me/${full}${q}`;
 }
 
+/* ---------------------------------------------------- fotos (miniatura) */
+
+/** Lado maior da miniatura (listas do app e grade do catálogo). */
+export const THUMB_PX = 720;
+
+/** Caminho da miniatura no Storage: "p/abc.webp" → "p/abc.t.webp". */
+export function thumbPath(path) {
+  return String(path || '').replace(/(\.[a-z0-9]+)?$/i, '.t$1');
+}
+
+/**
+ * URL da miniatura de uma foto do Storage. Outras URLs voltam iguais; se a
+ * miniatura não existir, a tela cai na grande (installThumbFallback).
+ */
+export function thumbUrl(url) {
+  const s = String(url || '');
+  if (!s.includes('/storage/v1/object/public/')) return s;
+  const [base, query] = s.split('?');
+  return thumbPath(base) + (query ? `?${query}` : '');
+}
+
+/**
+ * <img data-full="..."> que falhar (miniatura que não existe) troca para a
+ * foto grande. Um ouvinte só, na fase de captura (o "error" de imagem não
+ * sobe) - e sem onerror inline, que a CSP bloqueia.
+ */
+export function installThumbFallback(root = document) {
+  root.addEventListener('error', (e) => {
+    const img = e.target;
+    if (img?.tagName !== 'IMG' || !img.dataset.full || img.getAttribute('src') === img.dataset.full) return;
+    img.src = img.dataset.full;
+  }, true);
+}
+
 /* ------------------------------------------------------------------ Misc */
 
+/** UUID v4 (vira id no banco: pedido, cliente e pagamento nascem no aparelho). */
 export function uid() {
   if (globalThis.crypto?.randomUUID) return crypto.randomUUID();
-  return `id-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
+  // iPhone antigo (iOS < 15.4) não tem randomUUID - e o banco exige UUID.
+  const b = new Uint8Array(16);
+  if (globalThis.crypto?.getRandomValues) crypto.getRandomValues(b);
+  else for (let i = 0; i < 16; i++) b[i] = Math.floor(Math.random() * 256);
+  b[6] = (b[6] & 0x0f) | 0x40;
+  b[8] = (b[8] & 0x3f) | 0x80;
+  const h = [...b].map((x) => x.toString(16).padStart(2, '0')).join('');
+  return `${h.slice(0, 8)}-${h.slice(8, 12)}-${h.slice(12, 16)}-${h.slice(16, 20)}-${h.slice(20)}`;
 }
 
 export function debounce(fn, wait = 250) {
@@ -246,8 +302,11 @@ export function clamp(n, min, max) {
 export function toCSV(rows, headers) {
   const cols = headers || Object.keys(rows[0] ?? {});
   const escape = (v) => {
-    const s = v === null || v === undefined ? '' : String(v);
-    return /[";\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+    let s = v === null || v === undefined ? '' : String(v);
+    // Planilha aberta no Excel não pode executar fórmula vinda de um nome
+    // de cliente ("=HYPERLINK(...)"): vira texto. Número negativo passa.
+    if (typeof v === 'string' && /^[=+\-@\t\r]/.test(s) && !/^-[\d.,\s]*$/.test(s)) s = `'${s}`;
+    return /[";\r\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
   };
   const lines = [cols.join(';')];
   for (const row of rows) lines.push(cols.map((c) => escape(row[c])).join(';'));

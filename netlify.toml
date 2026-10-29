@@ -23,7 +23,8 @@
     Referrer-Policy = "strict-origin-when-cross-origin"
 
     # Recursos do aparelho que a página nunca precisa.
-    Permissions-Policy = "accelerometer=(), camera=(), geolocation=(), gyroscope=(), magnetometer=(), microphone=(), payment=(), usb=(), interest-cohort=()"
+    # Câmera só para o próprio site (foto do produto no iPhone/Android); o resto bloqueado.
+    Permissions-Policy = "accelerometer=(), camera=(self), geolocation=(), gyroscope=(), magnetometer=(), microphone=(), payment=(), usb=(), interest-cohort=()"
 
     # Painel interno: fora dos buscadores.
     X-Robots-Tag = "noindex, nofollow, noarchive"
@@ -44,7 +45,7 @@
       script-src 'self' https://cdn.jsdelivr.net;
       style-src 'self' 'unsafe-inline' https://fonts.googleapis.com;
       font-src 'self' https://fonts.gstatic.com;
-      img-src 'self' data:;
+      img-src 'self' data: blob: https://*.supabase.co;
       connect-src 'self' https://*.supabase.co wss://*.supabase.co https://viacep.com.br;
       manifest-src 'self';
       worker-src 'self';
@@ -57,20 +58,71 @@
   [headers.values]
     Cache-Control = "public, max-age=0, must-revalidate"
 
+# Service worker dos avisos de vencimento: sempre a versão mais nova.
+[[headers]]
+  for = "/sw.js"
+  [headers.values]
+    Cache-Control = "no-cache"
+    Service-Worker-Allowed = "/"
+
 # Os arquivos do app revalidam a cada visita (rápido por ETag, mas sempre atual).
 [[headers]]
   for = "/assets/*"
   [headers.values]
     Cache-Control = "public, max-age=0, must-revalidate"
 
-# O SQL do banco não precisa ser servido pelo site.
+# Catálogo: o link que vai para o cliente. Continua fora do Google (noindex
+# do bloco geral); para aparecer em busca, troque o X-Robots-Tag só aqui.
 [[headers]]
-  for = "/supabase/*"
+  for = "/catalogo.html"
   [headers.values]
-    X-Robots-Tag = "noindex, nofollow"
+    Cache-Control = "public, max-age=0, must-revalidate"
 
 # ----------------------------------------------------------------- rotas --
 # A navegação é por hash (#/pedidos), então qualquer caminho cai no index.
+
+# Pastas internas (SQL, testes, documentação) não são servidas pelo site.
+[[redirects]]
+  from = "/supabase/*"
+  to = "/404"
+  status = 404
+  force = true
+
+[[redirects]]
+  from = "/tests/*"
+  to = "/404"
+  status = 404
+  force = true
+
+[[redirects]]
+  from = "/contextos/*"
+  to = "/404"
+  status = 404
+  force = true
+
+[[redirects]]
+  from = "/CLAUDE.md"
+  to = "/404"
+  status = 404
+  force = true
+
+[[redirects]]
+  from = "/09_guia_para_replicar.md"
+  to = "/404"
+  status = 404
+  force = true
+
+[[redirects]]
+  from = "/.github/*"
+  to = "/404"
+  status = 404
+  force = true
+
+[[redirects]]
+  from = "/README.md"
+  to = "/404"
+  status = 404
+  force = true
 
 [[redirects]]
   from = "/*"

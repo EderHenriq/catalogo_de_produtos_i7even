@@ -1,13 +1,15 @@
 /** Formulário de cadastro / edição de pedido. */
 
-import * as Store from '../core/store.js';
-import { newOrderDraft } from '../core/store.js';
+import { newOrderDraft } from '../core/data.js';
 import {
   STATUSES, PAYMENT_METHODS, CHANNELS, SHIPPING_METHODS, UFS,
 } from '../core/constants.js';
-import { openProductPicker } from './product-picker.js';
+import * as Data from '../core/data.js';
+import { friendlyError, isConflict } from '../core/errors.js';
+import { openProductPicker, itemsFooter, countsByProduct } from './product-picker.js';
 import { openItemEditor } from './item-editor.js';
 import { paymentsHTML, wirePayments } from './payments.js';
+import { mountPlanEditor } from './plan-editor.js';
 import { openModal, toast, toastError, confirmDialog, withLoading } from './kit.js';
 import { icon } from './icons.js';
 import {
@@ -40,10 +42,11 @@ export function computeTotals(order) {
 }
 
 /**
- * @param {{order?: object, onSaved?: (o: object) => void}} opts
+ * @param {{order?: object, prefill?: object, onSaved?: (o: object) => void}} opts
+ *   prefill: campos de um pedido novo já preenchidos (ex.: pedido do catálogo)
  */
-export function openOrderForm({ order = null, onSaved } = {}) {
-  const draft = order ? structuredClone(order) : newOrderDraft();
+export function openOrderForm({ order = null, prefill = null, onSaved } = {}) {
+  const draft = order ? structuredClone(order) : { ...newOrderDraft(), ...(prefill || {}) };
   const editing = !!draft.id;
   const initial = JSON.stringify(draft);
 
@@ -75,12 +78,38 @@ export function openOrderForm({ order = null, onSaved } = {}) {
   const $items = panel.querySelector('[data-items]');
   const $totals = panel.querySelector('[data-totals]');
   const $payments = panel.querySelector('[data-payments]');
+  if (!Array.isArray(draft.plan)) draft.plan = [];
 
   /* -------------------------------------------------------- pagamentos */
 
   function renderPayments() {
     const t = computeTotals(draft);
     $payments.innerHTML = paymentsHTML(draft, t.total);
+    plan?.refresh();
+    renderStatusHint();
+  }
+
+  /* ---------------------------------------------------- fiado / parcelas */
+
+  const $planBox = panel.querySelector('[data-plan-box]');
+  const plan = mountPlanEditor(panel.querySelector('[data-plan]'), {
+    plan: draft.plan,
+    total: () => computeTotals(draft).total,
+    paid: () => computeTotals(draft).paid,
+    onChange: (list) => { draft.plan = list; },
+  });
+  if (draft.plan.length) $planBox.open = true;
+
+  /** "Pago"/"Finalizado" com saldo: avisa o que o banco vai fazer. */
+  function renderStatusHint() {
+    const el = panel.querySelector('[data-status-hint]');
+    if (!el) return;
+    const t = computeTotals(draft);
+    const open = t.total > 0 && t.balance > 0;
+    el.hidden = !(open && ['pago', 'entregue'].includes(draft.status));
+    el.innerHTML = draft.status === 'entregue'
+      ? `${icon('wallet')}<div>Falta receber <b>${esc(money(t.balance))}</b>: o cliente leva no <b>fiado</b> e o pedido fica <b>Aguardando pagamento</b> até quitar (finaliza sozinho).</div>`
+      : `${icon('alert')}<div>Falta receber <b>${esc(money(t.balance))}</b>: sem o pagamento o pedido fica <b>Aguardando pagamento</b>.</div>`;
   }
 
   wirePayments(
@@ -115,10 +144,12 @@ export function openOrderForm({ order = null, onSaved } = {}) {
           <div class="grow" data-edit-item="${i}" role="button" tabindex="0" aria-label="Editar item">
             <div class="item-title">${esc(it.productName || 'Item')}</div>
             <div class="item-meta">
-              ${[it.size, it.variant, it.color, it.condition, it.origin]
+              ${[it.size, it.variant, it.color, it.condition, it.band, it.origin]
                 .filter(Boolean).map((t) => `<span class="tag">${esc(t)}</span>`).join('')}
-              ${it.serial ? `<span class="tag">${icon('tag')} ${esc(it.serial)}</span>` : ''}
+              ${it.serial ? `<span class="tag mono">${icon('device')} ${esc(it.serial)}</span>` : ''}
               ${it.qty > 1 ? `<span class="tag">${esc(it.qty)}×</span>` : ''}
+              ${needsSerial(it) ? `<span class="tag tone-amber">${icon('alert')} IMEI a definir</span>` : ''}
+              ${!it.variantId && !Data.product(it.productId) ? '<span class="tag">avulso</span>' : ''}
             </div>
             ${it.note ? `<div class="xs dim" style="margin-top:5px">${esc(it.note)}</div>` : ''}
           </div>
@@ -166,12 +197,22 @@ export function openOrderForm({ order = null, onSaved } = {}) {
   panel.addEventListener('click', (e) => {
     if (e.target.closest('[data-pick]')) {
       openProductPicker({
-        defaultCategory: draft.items.at(-1)?.categoryId || 'iphone',
-        items: () => draft.items,
-        onAdd: (items) => {
-          draft.items.push(...items);
-          renderItems();
-          renderPayments();
+        defaultCategory: draft.items.at(-1)?.categoryId || '',
+        counts: () => countsByProduct(draft.items),
+        footer: () => `${itemsFooter(draft.items)} no pedido`,
+        onPick: (product, picker) => {
+          openItemEditor({
+            productId: product?.id || null,
+            orderId: draft.id,
+            takenUnitIds: takenUnits(),
+            onSave: (item) => {
+              draft.items.push(item);
+              renderItems();
+              renderPayments();
+              picker.refresh();
+              if (item.productId) picker.bump(item.productId);
+            },
+          });
         },
       });
       return;
@@ -193,7 +234,11 @@ export function openOrderForm({ order = null, onSaved } = {}) {
       const src = draft.items[index];
       if (!src) return;
       // Cópia para o segundo aparelho igual: mesmo modelo e valor, outro IMEI.
-      draft.items.splice(index + 1, 0, { ...structuredClone(src), id: uid(), serial: '' });
+      draft.items.splice(index + 1, 0, {
+        ...structuredClone(src), id: uid(), unitIds: [],
+        serial: Data.product(src.productId)?.tracksSerial ? '' : src.serial,
+        costSource: src.costSource === 'manual' ? 'manual' : 'auto',
+      });
       renderItems();
       renderPayments();
       return;
@@ -215,12 +260,24 @@ export function openOrderForm({ order = null, onSaved } = {}) {
     if (!it) return;
     openItemEditor({
       item: it,
+      orderId: draft.id,
+      takenUnitIds: takenUnits(index),
       onSave: (novo) => {
         draft.items[index] = novo;
         renderItems();
         renderPayments();
       },
     });
+  }
+
+  /** Aparelhos já escolhidos nos outros itens do pedido (não aparecem de novo). */
+  function takenUnits(exceptIndex = -1) {
+    return new Set(draft.items.flatMap((x, i) => (i === exceptIndex ? [] : x.unitIds || [])));
+  }
+
+  /** Aparelho com IMEI ainda sem a unidade escolhida (encomenda). */
+  function needsSerial(it) {
+    return !!(it.variantId && Data.product(it.productId)?.tracksSerial && (it.unitIds || []).length < (Number(it.qty) || 1));
   }
 
   /* --------------------------------------------------- campos do pedido */
@@ -250,6 +307,7 @@ export function openOrderForm({ order = null, onSaved } = {}) {
     if (f.type === 'checkbox') draft[f.dataset.field] = f.checked;
     else draft[f.dataset.field] = f.value;
     if (f.dataset.field === 'customerName') fillFromCustomer(f.value);
+    if (f.dataset.field === 'status') renderStatusHint();
   });
 
   // Busca de CEP pelos Correios (ViaCEP) - preenche o endereço sozinho.
@@ -277,9 +335,10 @@ export function openOrderForm({ order = null, onSaved } = {}) {
   /** Ao repetir um cliente já cadastrado, puxa telefone e endereço. */
   function fillFromCustomer(name) {
     if (editing) return;
-    const found = Store.customers().find(
+    const found = Data.customersList().find(
       (c) => c.name.toLowerCase() === String(name).trim().toLowerCase(),
     );
+    draft.customerId = found?.id || null;
     if (!found) return;
     const map = {
       customerPhone: found.phone, customerEmail: found.email, customerDoc: found.doc,
@@ -324,15 +383,68 @@ export function openOrderForm({ order = null, onSaved } = {}) {
     // `$save` e não `e.currentTarget`: depois de um `await` o evento já
     // terminou e o currentTarget vira null - o salvamento quebrava em
     // silêncio quando passava pela confirmação acima.
+    // Encomenda chegando a "Em entrega"/"Finalizado" sem o IMEI: avisa antes do banco recusar.
+    if (['enviado', 'entregue'].includes(draft.status) && draft.items.some(needsSerial)) {
+      toast('Escolha o IMEI dos aparelhos', { kind: 'warn', text: 'Toque no item marcado "IMEI a definir" - sem ele o pedido não vai para Em entrega/Finalizado.' });
+      return;
+    }
+
+    // Parcelas que não fecham com o total (o pedido mudou depois de montar).
+    if (draft.status !== 'orcamento' && draft.status !== 'cancelado' && !plan.fits()) {
+      const t = computeTotals(draft);
+      const fix = await confirmDialog({
+        title: 'As parcelas não fecham com o total',
+        message: `O pedido agora é de ${money(t.total)}. Ajustar as parcelas que ainda estão abertas para fechar?`,
+        confirmText: 'Ajustar parcelas',
+      });
+      if (!fix) { $planBox.open = true; $planBox.scrollIntoView({ block: 'center', behavior: 'smooth' }); return; }
+      plan.fit();
+    }
+    // Fiado: finalizar sem receber tudo = entrega no fiado (o banco deixa aguardando).
+    const tt = computeTotals(draft);
+    if (draft.status === 'entregue' && tt.total > 0 && tt.balance > 0 && !(order && order.status === 'aguardando' && order.handedOverAt)) {
+      const go = await confirmDialog({
+        title: 'Entregar no fiado?',
+        message: `Falta receber ${money(tt.balance)}. O cliente leva agora e o pedido fica "Aguardando pagamento" até quitar - aí finaliza sozinho.${draft.plan.length ? '' : '\n\nDica: monte as parcelas em "Fiado / parcelas" para receber os avisos de vencimento.'}`,
+        confirmText: 'Entregar no fiado',
+      });
+      if (!go) return;
+    }
+
+    const save = async () => {
+      const saved = await Data.saveOrder(draft);
+      toast(editing ? 'Pedido atualizado' : `Pedido #${String(saved.code).padStart(4, '0')} criado`);
+      modal.close();
+      onSaved?.(saved);
+    };
+
     await withLoading($save, async () => {
       try {
-        const saved = await Store.save(draft);
-        toast(editing ? 'Pedido atualizado' : `Pedido #${String(saved.code).padStart(4, '0')} criado`);
-        modal.close();
-        onSaved?.(saved);
+        await save();
       } catch (err) {
         console.error(err);
-        toastError('Não foi possível salvar', friendlySaveError(err));
+        if (isConflict(err)) {
+          toastError('Pedido alterado em outro aparelho', friendlyError(err));
+          return;
+        }
+        // Falta estoque: oferecer guardar como orçamento (não tira do estoque).
+        if (/Estoque insuficiente/.test(err?.message || '') && draft.status !== 'orcamento') {
+          const asQuote = await confirmDialog({
+            title: 'Falta estoque',
+            message: `${friendlyError(err)}
+
+Quer salvar como orçamento? Ele não mexe no estoque e vira pedido depois.`,
+            confirmText: 'Salvar como orçamento',
+          });
+          if (asQuote) {
+            draft.status = 'orcamento';
+            const sel = panel.querySelector('[data-field="status"]');
+            if (sel) sel.value = 'orcamento';
+            try { await save(); } catch (e2) { toastError('Não foi possível salvar', friendlyError(e2)); }
+          }
+          return;
+        }
+        toastError('Não foi possível salvar', friendlyError(err));
       }
     });
   });
@@ -340,29 +452,6 @@ export function openOrderForm({ order = null, onSaved } = {}) {
   renderItems();
   renderPayments();
   return modal;
-}
-
-/**
- * Mensagem de erro que a pessoa entende. O que importa dizer: o pedido NÃO
- * foi salvo, mas continua preenchido na tela - dá para tentar de novo.
- */
-function friendlySaveError(err) {
-  const msg = String(err?.message || err || '');
-  const low = msg.toLowerCase();
-  if (/failed to fetch|networkerror|load failed|network request failed/.test(low)) {
-    return 'Sem conexão com a internet. O pedido continua preenchido: confira o sinal e toque em salvar de novo.';
-  }
-  if (/jwt|token|not authenticated|401/.test(low)) {
-    return 'Sua sessão expirou. Recarregue a página e entre de novo (copie o que for importante antes).';
-  }
-  if (/row-level security|permission denied|42501/.test(low)) {
-    return 'Sua conta não tem permissão para gravar pedidos. Confira o cadastro em store_members no Supabase.';
-  }
-  if (/orders_items_size/.test(low)) return 'O pedido passou do limite de 100 itens.';
-  if (/check constraint|violates/.test(low)) {
-    return `Algum campo está fora do formato aceito pelo banco. Detalhe técnico: ${msg}`;
-  }
-  return msg || 'Tente novamente.';
 }
 
 /* ----------------------------------------------------------- template -- */
@@ -376,7 +465,7 @@ function options(list, current) {
 }
 
 function bodyHTML(d) {
-  const names = [...new Set(Store.all().map((o) => o.customerName).filter(Boolean))].slice(0, 300);
+  const names = Data.customersList().filter((c) => c.active).map((c) => c.name).slice(0, 500);
 
   return `
     <section class="fieldset">
@@ -461,6 +550,16 @@ function bodyHTML(d) {
       <div data-payments></div>
     </section>
 
+    <details class="fieldset" data-plan-box>
+      <summary class="fieldset-title">
+        Fiado / parcelas
+        <span class="summary-chev">${icon('chevronDown')}</span>
+      </summary>
+      <p class="hint">Cliente vai pagar o resto depois? Monte a entrada e as parcelas: o sistema avisa no dia do vencimento, mostra quem está atrasado
+        em <b>A receber</b> e o pedido só finaliza quando tudo for pago.</p>
+      <div data-plan></div>
+    </details>
+
     <!-- No celular a entrega começa fechada: menos rolagem no cadastro. -->
     <details class="fieldset" ${isMobile() ? '' : 'open'}>
       <summary class="fieldset-title">
@@ -525,6 +624,7 @@ function bodyHTML(d) {
           <label class="label" for="f-status">Status do pedido</label>
           <select class="select" id="f-status" data-field="status">${options(STATUSES, d.status)}</select>
         </div>
+        <div class="span-12 alert" data-kind="warn" data-status-hint hidden></div>
         <div class="field span-4 span-half-mobile">
           <label class="label" for="f-date">Data do pedido</label>
           <input class="input" id="f-date" data-field="orderDate" type="date" value="${esc(d.orderDate || todayISO())}">

@@ -8,6 +8,34 @@ import { getConfig } from '../config.js';
 
 let client = null;
 
+/*
+ * Tempo limite: no 4G "conectado mas sem dados" uma chamada fica pendurada
+ * para sempre (o botão Salvar girando). Estourou o tempo, vira erro de rede
+ * comum e a tela avisa. Reenviar é seguro: pedido novo tem um código do
+ * aparelho (client_ref) e pagamento nasce com id - o banco não grava duas vezes.
+ */
+const TIMEOUT_MS = 20000;
+const UPLOAD_TIMEOUT_MS = 90000;
+
+export function fetchWithTimeout(input, init = {}) {
+  const url = typeof input === 'string' ? input : input?.url || '';
+  const ms = url.includes('/storage/v1/') ? UPLOAD_TIMEOUT_MS : TIMEOUT_MS;
+  const ctrl = new AbortController();
+  const outer = init.signal;
+  if (outer) {
+    if (outer.aborted) ctrl.abort();
+    else outer.addEventListener('abort', () => ctrl.abort(), { once: true });
+  }
+  let timedOut = false;
+  const timer = setTimeout(() => { timedOut = true; ctrl.abort(); }, ms);
+  return fetch(input, { ...init, signal: ctrl.signal })
+    .catch((err) => {
+      if (timedOut) throw new TypeError('Failed to fetch (tempo esgotado)');
+      throw err;
+    })
+    .finally(() => clearTimeout(timer));
+}
+
 export function getClient() {
   if (client) return client;
   const cfg = getConfig();
@@ -16,12 +44,14 @@ export function getClient() {
     auth: {
       persistSession: true,
       autoRefreshToken: true,
-      detectSessionInUrl: false, // login é só e-mail + senha; nada de token na URL
+      // O link de "esqueci minha senha" volta com o código na URL.
+      detectSessionInUrl: true,
       storageKey: 'i7even.auth',
       flowType: 'pkce',
     },
     global: {
-      headers: { 'x-client-info': 'i7even-pedidos/1.0' },
+      headers: { 'x-client-info': 'i7even-pedidos/2.0' },
+      fetch: fetchWithTimeout,
     },
   });
   return client;
@@ -62,6 +92,12 @@ export async function signOut() {
   await getClient().auth.signOut();
 }
 
+/** Encerra a sessão em TODOS os aparelhos (celular perdido, senha exposta). */
+export async function signOutEverywhere() {
+  const { error } = await getClient().auth.signOut({ scope: 'global' });
+  if (error) throw new Error(friendlyAuthError(error));
+}
+
 export async function sendPasswordReset(email) {
   const { error } = await getClient().auth.resetPasswordForEmail(String(email).trim().toLowerCase(), {
     redirectTo: `${location.origin}${location.pathname}`,
@@ -82,9 +118,12 @@ export function friendlyAuthError(error) {
   if (msg.includes('rate limit') || msg.includes('too many')) {
     return 'Muitas tentativas. Aguarde alguns minutos e tente de novo.';
   }
-  if (msg.includes('password should be at least')) return 'A senha precisa ter pelo menos 6 caracteres.';
-  if (msg.includes('failed to fetch') || msg.includes('networkerror')) {
-    return 'Sem conexão com o servidor. Verifique a internet e a URL do projeto.';
+  if (msg.includes('password should') || msg.includes('weak password') || msg.includes('weak_password')) {
+    return 'Senha fraca: use pelo menos 8 caracteres, misturando letras e números.';
+  }
+  if (msg.includes('same as the old') || msg.includes('should be different')) return 'A nova senha precisa ser diferente da atual.';
+  if (msg.includes('failed to fetch') || msg.includes('networkerror') || msg.includes('load failed')) {
+    return 'Sem conexão com o servidor. Verifique a internet.';
   }
   if (msg.includes('signups not allowed')) return 'Cadastro desativado. Crie o usuário pelo painel do Supabase.';
   return error?.message || 'Não foi possível concluir a operação.';
