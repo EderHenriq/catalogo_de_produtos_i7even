@@ -219,7 +219,11 @@ export function openMenu(anchor, items) {
       </button>`)
     .join('');
 
-  document.body.appendChild(menu);
+  // Dentro de um modal (camada do topo), o menu tem que morar no modal da
+  // frente - no <body> ele abria ATRÁS da janela e o ⋮ parecia não funcionar.
+  const host = anchor.closest('dialog[open]') || [...document.querySelectorAll('dialog[open]')].pop();
+  if (host) menu.style.position = 'fixed';
+  (host || document.body).appendChild(menu);
 
   const r = anchor.getBoundingClientRect();
   const mw = menu.offsetWidth;

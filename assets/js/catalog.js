@@ -580,7 +580,7 @@ function openProduct(id) {
           : `<div class="cat-slide empty">${icon('device')}</div>`}
         </div>
         <div class="cat-sheet-info">
-          <p class="cat-eyebrow">${esc([p.brand, p.year].filter(Boolean).join(' · '))}</p>
+          ${p.brand ? `<p class="cat-eyebrow">${esc(p.brand)}</p>` : ''}
           <h2>${esc(p.name)}</h2>
           <div class="cat-price-row">
             <span class="cat-price">${v ? esc(money(modePrice(v, mode))) : '-'}</span>

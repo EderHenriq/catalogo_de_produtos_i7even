@@ -1036,8 +1036,8 @@ export function openVariantSheet(variantId, { onChange } = {}) {
 function unitMenu(anchor, u, done) {
   if (!u) return;
   const items = [
-    { label: 'Corrigir dados do aparelho', icon: 'edit', onSelect: () => openUnitForm(u, { onDone: done }) },
-    { label: 'Copiar IMEI', icon: 'copy', onSelect: () => copyText(u.serial, 'IMEI copiado') },
+    { label: u.serial ? 'Corrigir dados do aparelho' : 'Anotar IMEI / corrigir dados', icon: 'edit', onSelect: () => openUnitForm(u, { onDone: done }) },
+    ...(u.serial ? [{ label: 'Copiar IMEI', icon: 'copy', onSelect: () => copyText(u.serial, 'IMEI copiado') }] : []),
   ];
   if (u.status === 'estoque') items.push({ label: 'Dar baixa (defeito, devolução…)', icon: 'trash', danger: true, separatorBefore: true, onSelect: () => openDiscardUnit(u, { onDone: done }) });
   if (u.status === 'baixa') items.push({ label: 'Desfazer a baixa', icon: 'refresh', separatorBefore: true,
