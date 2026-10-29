@@ -25,6 +25,8 @@ import { openProductSheet } from './products.js';
 import { openOrderListImport } from './order-list-import.js';
 
 const QR_LIB = 'https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/+esm';
+// QR pronto (link + nome da loja → imagem): voltar à tela não desenha de novo.
+const qrCache = { key: '', canvas: null, src: '' };
 
 export function mount(host, ctx) {
   let tab = Data.catalogRequests().some((r) => r.status === 'novo') ? 'pedidos' : 'divulgar';
@@ -223,38 +225,49 @@ export function mount(host, ctx) {
   async function drawQR() {
     const box = root.querySelector('[data-qr]');
     if (!box) return;
-    try {
-      const { default: qrcode } = await import(QR_LIB);
-      const qr = qrcode(0, 'M');
-      qr.addData(catalogUrl());
-      qr.make();
-      // Arte para imprimir: QR grande + nome da loja + "aponte a câmera".
-      const n = qr.getModuleCount();
-      const cell = 10;
-      const pad = 40;
-      const size = n * cell + pad * 2;
-      const canvas = document.createElement('canvas');
-      canvas.width = size;
-      canvas.height = size + 90;
-      const g = canvas.getContext('2d');
-      g.fillStyle = '#fff'; g.fillRect(0, 0, canvas.width, canvas.height);
-      g.fillStyle = '#0e0f11';
-      for (let r = 0; r < n; r++) for (let c = 0; c < n; c++) if (qr.isDark(r, c)) g.fillRect(pad + c * cell, pad + r * cell, cell, cell);
-      g.textAlign = 'center';
-      g.font = '600 30px Sora, system-ui, sans-serif';
-      g.fillText(Data.settings().storeName, size / 2, size + 34);
-      g.fillStyle = '#6e7076';
-      g.font = '400 20px Sora, system-ui, sans-serif';
-      g.fillText('Aponte a câmera e veja o catálogo', size / 2, size + 66);
-      qrCanvas = canvas;
-      if (!box.isConnected) return;
-      box.innerHTML = `<img src="${canvas.toDataURL('image/png')}" alt="QR code do catálogo">`;
-      const dl = root.querySelector('[data-qr-download]');
-      if (dl) dl.disabled = false;
-    } catch (err) {
-      console.warn('QR', err);
-      if (box.isConnected) box.innerHTML = '<span class="xs dim center">Sem internet para gerar o QR agora.</span>';
+    const key = `${catalogUrl()}|${Data.settings().storeName}`;
+    if (qrCache.key !== key) {
+      try {
+        qrCache.canvas = await buildQR();
+        qrCache.src = qrCache.canvas.toDataURL('image/png');
+        qrCache.key = key;
+      } catch (err) {
+        console.warn('QR', err);
+        if (box.isConnected) box.innerHTML = '<span class="xs dim center">Sem internet para gerar o QR agora.</span>';
+        return;
+      }
     }
+    qrCanvas = qrCache.canvas;
+    if (!box.isConnected) return;
+    box.innerHTML = `<img src="${qrCache.src}" alt="QR code do catálogo">`;
+    const dl = root.querySelector('[data-qr-download]');
+    if (dl) dl.disabled = false;
+  }
+
+  /** Arte para imprimir: QR grande + nome da loja + "aponte a câmera". */
+  async function buildQR() {
+    const { default: qrcode } = await import(QR_LIB);
+    const qr = qrcode(0, 'M');
+    qr.addData(catalogUrl());
+    qr.make();
+    const n = qr.getModuleCount();
+    const cell = 10;
+    const pad = 40;
+    const size = n * cell + pad * 2;
+    const canvas = document.createElement('canvas');
+    canvas.width = size;
+    canvas.height = size + 90;
+    const g = canvas.getContext('2d');
+    g.fillStyle = '#fff'; g.fillRect(0, 0, canvas.width, canvas.height);
+    g.fillStyle = '#0e0f11';
+    for (let r = 0; r < n; r++) for (let c = 0; c < n; c++) if (qr.isDark(r, c)) g.fillRect(pad + c * cell, pad + r * cell, cell, cell);
+    g.textAlign = 'center';
+    g.font = '600 30px Sora, system-ui, sans-serif';
+    g.fillText(Data.settings().storeName, size / 2, size + 34);
+    g.fillStyle = '#6e7076';
+    g.font = '400 20px Sora, system-ui, sans-serif';
+    g.fillText('Aponte a câmera e veja o catálogo', size / 2, size + 66);
+    return canvas;
   }
 
   /* ------------------------------------------------------ sob encomenda -- */

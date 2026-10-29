@@ -20,8 +20,6 @@
   <link rel="apple-touch-icon" href="assets/brand/i7even-avatar-i7.svg">
   <link rel="manifest" href="manifest.webmanifest">
 
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link rel="preconnect" href="https://vsfrnhynhzhpzeymavtx.supabase.co" crossorigin>
   <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
 
@@ -71,9 +69,9 @@
   <link rel="modulepreload" href="https://cdn.jsdelivr.net/npm/@supabase/realtime-js@2.117.2/+esm">
   <link rel="modulepreload" href="https://cdn.jsdelivr.net/npm/@supabase/storage-js@2.117.2/+esm">
   <link rel="modulepreload" href="https://cdn.jsdelivr.net/npm/@supabase/functions-js@2.117.2/+esm">
-  <!-- Sora e IBM Plex Mono: as duas fontes da identidade da i7even. -->
-  <link rel="stylesheet"
-        href="https://fonts.googleapis.com/css2?family=Sora:wght@200..700&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
+  <!-- Sora e IBM Plex Mono: as duas fontes da identidade da i7even (servidas daqui). -->
+  <link rel="preload" href="assets/fonts/sora-200-700-latin.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="assets/css/fonts.css">
 
   <link rel="stylesheet" href="assets/css/tokens.css">
   <link rel="stylesheet" href="assets/css/base.css">

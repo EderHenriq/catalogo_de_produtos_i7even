@@ -46,17 +46,24 @@ const variantIndex = new Map();   // variantId → { product, variant }
 
 /* ------------------------------------------------------------ servidor -- */
 
+/**
+ * Sem `body` (só leitura): GET simples com a chave na URL - sem cabeçalhos,
+ * o navegador não faz a consulta extra de CORS (uma ida e volta a menos no
+ * 4G) e aproveita o preload do catalogo.html. Gravar continua POST.
+ */
 async function rpc(fn, body) {
   const cfg = getConfig();
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), TIMEOUT_MS);
   try {
-    const res = await fetch(`${cfg.url}/rest/v1/rpc/${fn}`, {
-      method: 'POST',
-      headers: { apikey: cfg.anonKey, 'Content-Type': 'application/json' },
-      body: JSON.stringify(body || {}),
-      signal: ctrl.signal,
-    });
+    const res = body === undefined
+      ? await fetch(`${cfg.url}/rest/v1/rpc/${fn}?apikey=${encodeURIComponent(cfg.anonKey)}`, { signal: ctrl.signal })
+      : await fetch(`${cfg.url}/rest/v1/rpc/${fn}`, {
+        method: 'POST',
+        headers: { apikey: cfg.anonKey, 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+        signal: ctrl.signal,
+      });
     const data = await res.json().catch(() => null);
     if (!res.ok) throw new Error(data?.message || `Erro ${res.status}`);
     return data;

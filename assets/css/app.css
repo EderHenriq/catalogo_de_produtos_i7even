@@ -75,6 +75,10 @@
 }
 button.m-row:hover, .m-row:has(> button:hover) { background: var(--surface-hover); }
 .m-row + .m-row { box-shadow: 0 -1px 0 var(--divider); }
+/* Listas longas (produtos, clientes, pedidos): a linha fora da tela só é
+   montada quando chega perto - abrir a tela não calcula as 100+ linhas. */
+.mobile-list > .m-row { content-visibility: auto; contain-intrinsic-size: auto 62px; }
+.order-cards > .order-card { content-visibility: auto; contain-intrinsic-size: auto 112px; }
 .m-row.is-muted { opacity: .55; }
 .m-main { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
 .m-title { font-weight: 560; font-size: var(--fs-md); letter-spacing: -.01em; overflow: hidden; text-overflow: ellipsis; }

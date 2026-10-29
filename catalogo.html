@@ -24,11 +24,19 @@
   <link rel="icon" href="assets/brand/i7even-avatar-i7.svg" type="image/svg+xml">
   <link rel="apple-touch-icon" href="assets/brand/i7even-avatar-i7.svg">
   <link rel="preconnect" href="https://vsfrnhynhzhpzeymavtx.supabase.co" crossorigin>
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <!--
+    Os dados do catálogo começam a vir junto com o HTML, sem esperar o
+    JavaScript (o catalog.js pede esta mesma URL e recebe a resposta pronta).
+    GET simples, sem cabeçalhos: o navegador não faz a consulta extra (CORS).
+    A chave é a "publishable" - a mesma do config.js, feita para ser pública.
+  -->
+  <link rel="preload" as="fetch" crossorigin="anonymous" href="https://vsfrnhynhzhpzeymavtx.supabase.co/rest/v1/rpc/public_catalog?apikey=sb_publishable__GLUx1HnUtWOQSL3H9iGHA_yBneT7Gh">
   <link rel="modulepreload" href="assets/js/catalog.js">
   <link rel="modulepreload" href="assets/js/config.js">
-  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Sora:wght@300..700&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
+  <link rel="modulepreload" href="assets/js/core/utils.js">
+  <link rel="modulepreload" href="assets/js/ui/icons.js">
+  <link rel="preload" href="assets/fonts/sora-200-700-latin.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="assets/css/fonts.css">
 
   <link rel="stylesheet" href="assets/css/tokens.css">
   <link rel="stylesheet" href="assets/css/base.css">

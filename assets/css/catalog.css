@@ -950,3 +950,30 @@ body.catalog { background: var(--cat-page); isolation: isolate; }
 /* sombras do vidro não cortam na faixa de filtros (que rola na horizontal) */
 .cat-pills { padding: 4px 4px 12px; margin-bottom: -10px; }
 .cat-cats { padding-bottom: 10px; }
+
+/* ============================================ desempenho no celular */
+/* Luz ambiente sem filtro: gradiente radial dá a mesma mancha suave sem o
+   blur(80px) - que no iPhone era recalculado a cada quadro da animação. */
+.cat-ambient i { filter: none; background: radial-gradient(circle closest-side, var(--orb) 0%, transparent 100%) !important; opacity: .5; will-change: transform; }
+.cat-ambient i:nth-child(1) { --orb: #7aa7ff; }
+.cat-ambient i:nth-child(2) { --orb: #b8f2d0; }
+.cat-ambient i:nth-child(3) { --orb: #f2c6ff; }
+:root[data-theme='dark'] .cat-ambient i { opacity: .24; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme='light']) .cat-ambient i { opacity: .24; } }
+
+/* Celular (toque): vidro de verdade (backdrop-filter) só no que flutua
+   sobre a página rolando - barra do topo e sacola. Abas, filtros, busca e
+   selos dos cartões ficam com o mesmo visual (gradiente + borda de luz), sem
+   desfocar o fundo: cada backdrop-filter é uma camada que o Safari refaz a
+   cada quadro da rolagem. A luz ambiente fica parada (sem animação). */
+@media (hover: none) {
+  .cat-avail-tab, .cat-pill, .cat-view, .cat-search input, .cat-sort select,
+  .cat-tools .cat-icon-btn, .cat-qty, .cat-opt-btn, .cat-close,
+  .cat-badge.muted, .cat-badge.order {
+    -webkit-backdrop-filter: none; backdrop-filter: none;
+  }
+  .cat-badge.muted { background: rgba(14, 15, 17, .78); }
+  .cat-badge.order { background: rgba(67, 64, 171, .92); }
+  .cat-mini, .cat-fab-bag { --glass-blur: blur(14px) saturate(170%); }
+  .cat-ambient i { animation: none; will-change: auto; }
+}
