@@ -109,7 +109,7 @@ for (const o of legacyOrders) {
     o.discount || 0, o.shipping_cost || 0, o.shipping_expense || 0]);
 }
 await as(null);
-const before = await all(`select id, code, customer_name, subtotal, total, profit, paid_amount, payment_status, cost_total
+const before = await all(`select id, code, customer_name, subtotal, total, profit, paid_amount, payment_status, cost_total, shipping_cost
                             from public.orders order by code`);
 ok(before.length === 5 && n(before[0].total) === 4659.8 && n(before[0].paid_amount) === 4659.8,
   `v1 calculou os totais pelo JSON (${before[0].total})`);
@@ -137,8 +137,10 @@ const after = await all(`select id, code, customer_name, subtotal, total, profit
 ok(after.every((o) => o.legacy_migrated), 'todos marcados como migrados');
 for (const [i, b] of before.entries()) {
   const a = after[i];
-  ok(['subtotal', 'total', 'profit', 'paid_amount', 'cost_total'].every((k) => n(a[k]) === n(b[k])) && a.payment_status === b.payment_status,
-    `pedido #${b.code} (${b.customer_name}): totais iguais (${a.total} / recebido ${a.paid_amount} / ${a.payment_status})`);
+  // o lucro da v1 não contava o frete cobrado do cliente; na v2 conta (total − custo − frete pago)
+  const expect = (k) => (k === 'profit' ? n(b.profit) + n(b.shipping_cost) : n(b[k]));
+  ok(['subtotal', 'total', 'profit', 'paid_amount', 'cost_total'].every((k) => Math.abs(n(a[k]) - expect(k)) < 0.005) && a.payment_status === b.payment_status,
+    `pedido #${b.code} (${b.customer_name}): totais iguais (${a.total} / recebido ${a.paid_amount} / ${a.payment_status}${n(b.shipping_cost) ? ` / lucro com o frete cobrado ${a.profit}` : ''})`);
 }
 r = await one(`select count(*)::int n from public.order_items`);
 ok(r.n === 5, 'itens copiados para order_items (5)');
@@ -574,6 +576,68 @@ await as('authenticated', eder);
 console.log('12. views de relatório');
 r = await one(`select count(*)::int n from public.order_items_view`);
 ok(r.n > 0, `order_items_view lê as tabelas novas (${r.n})`);
+
+console.log('13. lucro com frete, desconto, IMEI opcional e aparelho na troca');
+let o13 = await rpc('save_order', { status: 'orcamento', customer_name: 'Frete Teste', shipping_cost: 30, shipping_expense: 25,
+  items: [{ variant_id: cap2, product_name: 'Capa', qty: 1, unit_price: 200, unit_cost: 50 }] });
+ok(n(o13.total) === 230 && n(o13.profit) === 155, `lucro conta o frete cobrado: 200 + 30 − 50 − 25 = ${o13.profit}`);
+await expectError(`select public.save_order($1::jsonb)`, /desconto é maior/, 'desconto maior que o pedido não grava',
+  [JSON.stringify({ status: 'orcamento', customer_name: 'Desconto Demais', discount: 500, items: [{ variant_id: cap2, product_name: 'Capa', qty: 1, unit_price: 100 }] })]);
+
+const vSemImei13 = (await one(`insert into public.product_variants (product_id, storage, color, condition, price) values ($1, '256GB', 'Rosa', 'Seminovo', 3000) returning id`, [iph15])).id;
+await db.query(`select public.add_units($1, $2::jsonb, null)`, [vSemImei13, JSON.stringify([{ cost: 2000 }])]);
+const uSem13 = await one(`select id from public.units where variant_id = $1`, [vSemImei13]);
+r = await rpc('save_unit', { id: uSem13.id, serial: '', battery_health: '87', cost: 2000 });
+ok(r.battery_health === 87 && !r.serial, 'aparelho sem IMEI: dá para anotar a bateria (IMEI continua opcional)');
+
+const ot = await rpc('save_order', { status: 'novo', customer_name: 'Cliente Troca',
+  items: [{ variant_id: cap2, product_name: 'Capa', qty: 1, unit_price: 5000 }] });
+const trId = '0f000000-0000-4000-8000-0000000000a1';
+const trArg = { id: trId, order_id: ot.id, amount: 1800, paid_at: '2026-10-20', product_id: iph15, storage: '128GB', color: 'Azul',
+  serial: '359999999999991', battery_health: 84, notes: 'risco na tela' };
+let tr = (await one(`select public.register_trade_in($1::jsonb) r`, [JSON.stringify(trArg)])).r;
+let tu = await one(`select status, cost, origin, battery_health, serial, variant_id from public.units where id = $1`, [tr.unit_id]);
+ok(tu && tu.status === 'estoque' && n(tu.cost) === 1800 && tu.origin === 'Troca (cliente)' && tu.battery_health === 84,
+  'troca: o aparelho entrou no estoque com custo = valor da troca');
+let tv = await one(`select condition, storage, color, stock from public.product_variants where id = $1`, [tu.variant_id]);
+ok(tv.condition === 'Seminovo' && tv.storage === '128GB' && tv.color === 'Azul' && tv.stock === 1, 'na variação seminovo 128GB Azul, com 1 no estoque');
+let to = await one(`select paid_amount, balance, payment_status from public.orders where id = $1`, [ot.id]);
+ok(n(to.paid_amount) === 1800 && n(to.balance) === 3200 && to.payment_status === 'parcial', `pedido: 1800 recebidos com a troca, falta ${to.balance}`);
+let tp = await one(`select method, paid_at, trade_unit_id, trade_item from public.payments where id = $1`, [trId]);
+ok(tp.method === 'Aparelho na troca' && tp.trade_unit_id === tr.unit_id && tp.trade_item.serial === '359999999999991' && tp.trade_item.notes === 'risco na tela',
+  'pagamento "Aparelho na troca" guarda o aparelho (IMEI, observação)');
+r = await one(`select kind, order_id from public.stock_movements where unit_id = $1`, [tr.unit_id]);
+ok(r.kind === 'troca' && r.order_id === ot.id, 'histórico do estoque: movimento "troca" ligado ao pedido');
+const tr2 = (await one(`select public.register_trade_in($1::jsonb) r`, [JSON.stringify(trArg)])).r;
+r = await one(`select count(*)::int n from public.units where serial = '359999999999991'`);
+ok(tr2.payment_id === trId && r.n === 1, 'reenviar (internet caiu) não duplica o aparelho nem o pagamento');
+await expectError(`select public.register_trade_in($1::jsonb)`, /já está no estoque/, 'IMEI que já está no estoque é recusado',
+  [JSON.stringify({ order_id: ot.id, amount: 100, product_id: iph15, serial: '359999999999991' })]);
+await expectError(`update public.payments set amount = 1 where id = $1`, /não muda/, 'valor da troca não muda depois', [trId]);
+r = await one(`update public.payments set note = 'conferido' where id = $1 returning note`, [trId]);
+ok(r.note === 'conferido', 'a observação do pagamento da troca pode mudar');
+
+const trQ = (await one(`select public.register_trade_in($1::jsonb) r`, [JSON.stringify({ id: '0f000000-0000-4000-8000-0000000000a2',
+  order_id: ot.id, amount: 30, product_id: capa, color: 'Preta' })])).r;
+r = await one(`select stock, cost, condition from public.product_variants where id = $1`, [trQ.variant_id]);
+ok(!trQ.unit_id && r.stock === 1 && n(r.cost) === 30 && r.condition === 'Seminovo', 'por quantidade (capa): +1 no saldo com o custo da troca');
+await db.query(`delete from public.payments where id = '0f000000-0000-4000-8000-0000000000a2'`);
+r = await one(`select stock from public.product_variants where id = $1`, [trQ.variant_id]);
+ok(r.stock === 0, 'excluir o pagamento da troca devolve o saldo');
+
+await db.query(`delete from public.payments where id = $1`, [trId]);
+r = await one(`select count(*)::int n from public.units where serial = '359999999999991'`);
+const tv2 = await one(`select stock from public.product_variants where id = $1`, [tu.variant_id]);
+to = await one(`select paid_amount from public.orders where id = $1`, [ot.id]);
+ok(r.n === 0 && tv2.stock === 0 && n(to.paid_amount) === 0, 'excluir o pagamento da troca tira o aparelho do estoque e o valor do pedido');
+
+const tr3 = (await one(`select public.register_trade_in($1::jsonb) r`, [JSON.stringify({ id: '0f000000-0000-4000-8000-0000000000a3',
+  order_id: ot.id, amount: 1500, product_id: iph15, storage: '64GB', color: 'Preto' })])).r;
+await as(null);
+await db.query(`update public.units set status = 'vendido' where id = $1`, [tr3.unit_id]);
+await as('authenticated', eder);
+await expectError(`delete from public.payments where id = '0f000000-0000-4000-8000-0000000000a3'`, /não pode ser desfeita/,
+  'aparelho da troca já vendido: o pagamento não é apagado');
 
 await as(null);
 console.log(`\n${passes} ok, ${fails} falha(s)`);

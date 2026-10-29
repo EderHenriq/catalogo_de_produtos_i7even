@@ -201,8 +201,16 @@ const orderItemFromRow = (r) => ({
   costSource: 'db',
 });
 
+/** Aparelho na troca (trade_item do banco) → o mesmo formato do formulário. */
+const tradeFromRow = (t) => (t ? {
+  productId: t.product_id || null, productName: t.product_name || 'Aparelho', storage: t.storage || '', color: t.color || '',
+  condition: t.condition || 'Seminovo', serial: t.serial || '', battery: t.battery_health ?? null, notes: t.notes || '',
+  toStock: !!t.to_stock, variantId: t.variant_id || null,
+} : null);
+
 const paymentFromRow = (r) => ({
   id: r.id, date: r.paid_at, amount: num(r.amount), method: r.method || '', note: r.note || '', createdAt: r.created_at,
+  trade: tradeFromRow(r.trade_item), tradeUnitId: r.trade_unit_id || null,
 });
 
 const installmentFromRow = (r) => ({
@@ -1466,8 +1474,48 @@ export async function savePayment(orderId, p) {
 }
 
 export async function deletePayment(orderId, paymentId) {
+  const wasTrade = !!order(orderId)?.payments.find((p) => p.id === paymentId)?.trade;
+  if (wasTrade) mute('products', 'units');
   const { error } = await getClient().from('payments').delete().eq('id', paymentId);
   if (error) throw error;
+  // troca desfeita: o aparelho saiu do estoque de novo
+  if (wasTrade) await reload('products', 'units');
+  return refreshOrder(orderId);
+}
+
+/**
+ * Aparelho na troca: o pagamento entra no pedido e o aparelho no estoque
+ * (custo = valor da troca) numa transação só, no banco. O id nasce aqui:
+ * reenviar depois de uma queda de internet não duplica.
+ */
+export async function registerTradeIn(orderId, p) {
+  const t = p.trade || {};
+  const bat = t.battery === '' || t.battery == null ? null : Number(t.battery);
+  mute('products', 'units');
+  await rpc('register_trade_in', {
+    p: {
+      id: isUuid(p.id) ? p.id : uid(),
+      order_id: orderId,
+      amount: round2(num(p.amount)),
+      paid_at: /^\d{4}-\d{2}-\d{2}$/.test(String(p.date || '')) ? p.date : todayISO(),
+      product_id: t.productId || null,
+      product_name: nul(t.productName),
+      storage: nul(t.storage),
+      color: nul(t.color),
+      condition: t.condition || 'Seminovo',
+      serial: nul(t.serial),
+      battery_health: Number.isFinite(bat) ? bat : null,
+      notes: nul(t.notes),
+      to_stock: t.toStock !== false,
+    },
+  }).catch((err) => {
+    // banco ainda sem a função (schema.sql não foi rodado de novo depois da atualização)
+    if (err?.code === 'PGRST202' || /register_trade_in/.test(err?.message || '')) {
+      throw new Error('Para lançar aparelho na troca, rode o supabase/schema.sql de novo no Supabase (SQL Editor) e tente outra vez.');
+    }
+    throw err;
+  });
+  await reload('products', 'units');
   return refreshOrder(orderId);
 }
 

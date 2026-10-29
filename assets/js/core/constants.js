@@ -43,7 +43,11 @@ export const PAYMENT_METHODS = [
   'Boleto',
   'Parcelado na loja',
   'Entrada + saldo',
+  'Aparelho na troca',
 ];
+
+/** Forma de pagamento do aparelho que o cliente dá como (parte do) pagamento. */
+export const TRADE_METHOD = 'Aparelho na troca';
 
 export const PAYMENT_STATUSES = [
   { key: 'pendente', label: 'Pendente', tone: 'amber' },
@@ -93,6 +97,7 @@ export const MOVEMENT_KIND = {
   venda: { label: 'Pedido', tone: 'blue' },
   ajuste: { label: 'Ajuste', tone: 'amber' },
   baixa: { label: 'Baixa', tone: 'red' },
+  troca: { label: 'Troca (cliente)', tone: 'indigo' },
 };
 
 /** Motivos prontos do ajuste de estoque (produto por quantidade). */

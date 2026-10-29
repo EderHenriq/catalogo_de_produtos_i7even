@@ -5,6 +5,7 @@ import {
   STATUSES, PAYMENT_METHODS, CHANNELS, SHIPPING_METHODS, UFS,
 } from '../core/constants.js';
 import * as Data from '../core/data.js';
+import { orderTotals } from '../core/calc.js';
 import { friendlyError, isConflict } from '../core/errors.js';
 import { openProductPicker, itemsFooter, countsByProduct } from './product-picker.js';
 import { openItemEditor } from './item-editor.js';
@@ -19,26 +20,13 @@ import {
 /** Atributos comuns dos campos de dinheiro: teclado só de números no celular. */
 const MONEY_ATTRS = 'inputmode="numeric" autocomplete="off" placeholder="0,00"';
 
-/** Soma os totais do jeito que o banco calcula - a tela nunca mente. */
+/**
+ * Totais do jeito que o banco calcula - a tela nunca mente. Uma fórmula só
+ * (calc.orderTotals): quantidade nunca menor que os IMEIs escolhidos, lucro
+ * com o frete cobrado, centavos arredondados igual ao banco.
+ */
 export function computeTotals(order) {
-  const subtotal = (order.items || []).reduce((acc, it) => acc + (Number(it.unitPrice) || 0) * (Number(it.qty) || 1), 0);
-  const costTotal = (order.items || []).reduce((acc, it) => acc + (Number(it.unitCost) || 0) * (Number(it.qty) || 1), 0);
-  const discount = Number(order.discount) || 0;
-  const shipping = Number(order.shippingCost) || 0;
-  const shipExp = Number(order.shippingExpense) || 0;
-  const total = subtotal - discount + shipping;
-  // Recebido é sempre a soma dos lançamentos - igualzinho ao que o banco faz.
-  const paid = (order.payments || []).reduce((a, p) => a + (Number(p.amount) || 0), 0);
-  return {
-    subtotal,
-    costTotal,
-    discount,
-    shipping,
-    total,
-    paid,
-    profit: subtotal - discount - costTotal - shipExp,
-    balance: Math.max(Math.round((total - paid) * 100) / 100, 0),
-  };
+  return orderTotals(order || {});
 }
 
 /**
@@ -87,6 +75,18 @@ export function openOrderForm({ order = null, prefill = null, onSaved } = {}) {
     $payments.innerHTML = paymentsHTML(draft, t.total);
     plan?.refresh();
     renderStatusHint();
+    renderSaleHint();
+  }
+
+  /** Venda de balcão: quitou e o cliente já levou → "Finalizar venda" num toque. */
+  function renderSaleHint() {
+    const el = panel.querySelector('[data-sale-hint]');
+    if (!el) return;
+    const t = computeTotals(draft);
+    const show = draft.items.length && t.total > 0 && t.balance <= 0 && ['novo', 'pago', 'preparo'].includes(draft.status);
+    el.innerHTML = show ? `
+      <div class="alert" data-kind="success" style="margin-top:10px">${icon('checkCircle')}<div class="grow">Quitado. O cliente já levou?</div>
+        <button type="button" class="btn btn-sm btn-primary" data-finish-sale>Finalizar venda</button></div>` : '';
   }
 
   /* ---------------------------------------------------- fiado / parcelas */
@@ -183,7 +183,8 @@ export function openOrderForm({ order = null, prefill = null, onSaved } = {}) {
       ${t.shipping ? `<div class="totals-row"><span class="muted">Frete cobrado</span>
         <span class="num money-sensitive">${esc(money(t.shipping))}</span></div>` : ''}
       <div class="totals-row grand"><span>Total</span>
-        <span class="num money-sensitive">${esc(money(t.total))}</span></div>
+        <span class="num money-sensitive ${t.total < 0 ? 'neg' : ''}">${esc(money(t.total))}</span></div>
+      ${t.total < 0 ? `<div class="totals-row"><span class="small tone-red">${icon('alert')} O desconto passou do valor do pedido</span></div>` : ''}
       ${t.costTotal || draft.shippingExpense ? `
         <div class="totals-row"><span class="muted small">Lucro estimado</span>
           <span class="num small ${t.profit >= 0 ? 'pos' : 'neg'} money-sensitive">${esc(money(t.profit))}</span></div>` : ''}
@@ -195,6 +196,15 @@ export function openOrderForm({ order = null, prefill = null, onSaved } = {}) {
   }
 
   panel.addEventListener('click', (e) => {
+    if (e.target.closest('[data-finish-sale]')) {
+      draft.status = 'entregue';
+      const sel = panel.querySelector('[data-field="status"]');
+      if (sel) sel.value = 'entregue';
+      renderSaleHint();
+      renderStatusHint();
+      toast('Situação: Finalizado', { text: 'É só tocar em "Criar pedido".', duration: 2200 });
+      return;
+    }
     if (e.target.closest('[data-pick]')) {
       openProductPicker({
         defaultCategory: draft.items.at(-1)?.categoryId || '',
@@ -292,6 +302,7 @@ export function openOrderForm({ order = null, prefill = null, onSaved } = {}) {
 
     if (['discount', 'shippingCost', 'shippingExpense'].includes(name)) {
       draft[name] = parseMoney(f.value);
+      f.removeAttribute('aria-invalid');
       renderTotals();
       renderPayments();   // o saldo em aberto muda junto
       return;
@@ -307,7 +318,7 @@ export function openOrderForm({ order = null, prefill = null, onSaved } = {}) {
     if (f.type === 'checkbox') draft[f.dataset.field] = f.checked;
     else draft[f.dataset.field] = f.value;
     if (f.dataset.field === 'customerName') fillFromCustomer(f.value);
-    if (f.dataset.field === 'status') renderStatusHint();
+    if (f.dataset.field === 'status') { renderStatusHint(); renderSaleHint(); }
   });
 
   // Busca de CEP pelos Correios (ViaCEP) - preenche o endereço sozinho.
@@ -371,6 +382,16 @@ export function openOrderForm({ order = null, prefill = null, onSaved } = {}) {
       toast('Informe o nome do cliente.', { kind: 'warn' });
       return;
     }
+    // desconto maior que itens + frete: o banco recusaria (total negativo)
+    const t0 = computeTotals(draft);
+    if (t0.total < 0) {
+      const $d = panel.querySelector('[data-field="discount"]');
+      $d?.setAttribute('aria-invalid', 'true');
+      $d?.scrollIntoView({ block: 'center', behavior: 'smooth' });
+      $d?.focus({ preventScroll: true });
+      toast(`O desconto (${money(t0.discount)}) é maior que o pedido (${money(t0.subtotal + t0.shipping)}).`, { kind: 'warn' });
+      return;
+    }
     if (!draft.items.length) {
       const ok = await confirmDialog({
         title: 'Pedido sem itens',
@@ -409,7 +430,13 @@ export function openOrderForm({ order = null, prefill = null, onSaved } = {}) {
     }
 
     const save = async () => {
-      const saved = await Data.saveOrder(draft);
+      // Aparelho na troca lançado aqui: entra depois que o pedido existe -
+      // o banco grava o pagamento e o aparelho no estoque juntos.
+      const trades = draft.payments.filter((p) => p.trade && !p.tradeUnitId && !(order?.payments || []).some((x) => x.id === p.id));
+      let saved = await Data.saveOrder({ ...draft, payments: draft.payments.filter((p) => !trades.includes(p)) });
+      for (const t of trades) {
+        try { saved = await Data.registerTradeIn(saved.id, t); } catch (err) { toastError('O pedido foi salvo, mas o aparelho da troca não entrou', friendlyError(err)); }
+      }
       toast(editing ? 'Pedido atualizado' : `Pedido #${String(saved.code).padStart(4, '0')} criado`);
       modal.close();
       onSaved?.(saved);
@@ -545,6 +572,7 @@ function bodyHTML(d) {
         O “falta receber” se ajusta sozinho.
       </p>
       <div data-payments></div>
+      <div data-sale-hint></div>
     </section>
 
     <details class="fieldset" data-plan-box>

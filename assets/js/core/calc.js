@@ -20,7 +20,8 @@ export function round4(n) {
   return Math.round((v + Math.sign(v) * Number.EPSILON) * 10000) / 10000;
 }
 
-const qtyOf = (it) => Math.max(Math.trunc(Number(it.qty) || 1), 1);
+/** Quantidade como o banco grava: inteira, no mínimo 1 e nunca menos que os IMEIs escolhidos. */
+const qtyOf = (it) => Math.max(Math.trunc(Number(it.qty) || 1), 1, (it.unitIds || []).length);
 
 /* ------------------------------------------------------------ pedido --- */
 
@@ -28,7 +29,8 @@ const qtyOf = (it) => Math.max(Math.trunc(Number(it.qty) || 1), 1);
  * Totais do pedido - espelho de orders_compute_totals().
  *   subtotal = Σ preço × qtd
  *   total    = subtotal − desconto + frete cobrado
- *   lucro    = subtotal − desconto − Σ custo × qtd − frete que a loja pagou
+ *   lucro    = total − Σ custo × qtd − frete que a loja pagou
+ *              (o frete cobrado do cliente é receita; o pago ao entregador, despesa)
  *   recebido = Σ pagamentos (estorno entra negativo)
  */
 export function orderTotals({ items = [], payments = [], discount = 0, shippingCost = 0, shippingExpense = 0 }) {
@@ -54,7 +56,7 @@ export function orderTotals({ items = [], payments = [], discount = 0, shippingC
     shipping: round2(ship),
     total,
     paid,
-    profit: round2(subtotal - disc - costTotal - shipExp),
+    profit: round2(subtotal - disc + ship - costTotal - shipExp),
     balance: round2(Math.max(total - paid, 0)),
     overpaid: round2(Math.max(paid - total, 0)),
   };

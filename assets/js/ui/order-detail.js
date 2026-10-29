@@ -177,6 +177,8 @@ export function openOrderDetail(orderId, { onChanged } = {}) {
         for (const old of atual) if (!novos.has(old.id)) await Data.deletePayment(orderId, old.id);
         for (const pg of lista) {
           const old = atual.find((x) => x.id === pg.id);
+          // aparelho na troca: pagamento + aparelho no estoque, juntos no banco
+          if (!old && pg.trade) { await Data.registerTradeIn(orderId, pg); continue; }
           if (!old || old.amount !== pg.amount || old.date !== pg.date || old.method !== pg.method || old.note !== pg.note) {
             await Data.savePayment(orderId, pg);
           }

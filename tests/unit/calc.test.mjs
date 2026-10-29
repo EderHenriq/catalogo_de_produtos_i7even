@@ -19,9 +19,25 @@ test('totais do pedido (espelho do banco)', () => {
     payments: [{ amount: 1000 }], discount: 0, shippingCost: 0,
   });
   assert.equal(t.total, 4998.7);
+  assert.equal(t.balance, 3998.7);
   assert.equal(paymentState(4998.7, 1000), 'parcial');
   assert.equal(paymentState(100, 100), 'pago');
   assert.equal(paymentState(100, 0, true), 'estornado');
+});
+
+test('lucro conta o frete cobrado e desconta o frete pago (igual ao banco)', () => {
+  const t = orderTotals({ items: [{ qty: 1, unitPrice: 200, unitCost: 50 }], discount: 0, shippingCost: 30, shippingExpense: 25 });
+  assert.equal(t.total, 230);
+  assert.equal(t.profit, 155, '200 + 30 − 50 − 25');
+  const gratis = orderTotals({ items: [{ qty: 1, unitPrice: 200, unitCost: 50 }], shippingExpense: 25 });
+  assert.equal(gratis.profit, 125, 'frete grátis para o cliente: a loja paga 25');
+});
+
+test('quantidade como o banco grava: nunca menos que os IMEIs escolhidos', () => {
+  const t = orderTotals({ items: [{ qty: 1, unitPrice: 3000, unitCost: 2000, unitIds: ['a', 'b'] }] });
+  assert.equal(t.units, 2);
+  assert.equal(t.subtotal, 6000);
+  assert.equal(orderTotals({ items: [{ qty: 0, unitPrice: 10 }] }).subtotal, 10, 'quantidade 0 vira 1');
 });
 
 test('custo médio e margem', () => {

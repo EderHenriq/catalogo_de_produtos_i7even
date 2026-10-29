@@ -382,7 +382,7 @@ export function openStockItem(variantId, { onDone } = {}) {
         items: [Data.newItemDraft({
           productId: p.id, categoryId: p.categoryId || '', variantId: v.id, productName: p.name,
           variant: v.storage, color: v.color, size: v.size, condition: v.condition,
-          qty: 1, unitPrice: v.price, warrantyDays: Number(warranty[v.condition]) || 0,
+          qty: 1, unitPrice: v.price, unitCost: v.cost || 0, warrantyDays: Number(warranty[v.condition]) || 0,
         })],
       },
       onSaved: () => onDone?.(),

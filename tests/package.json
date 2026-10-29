@@ -8,7 +8,7 @@
     "test:unit": "node --test \"unit/*.test.mjs\"",
     "test:db": "node db/schema.test.mjs && node db/backup.test.mjs",
     "test:security": "node security/live.test.mjs",
-    "test:e2e": "node e2e/smoke.test.mjs && node e2e/flow.test.mjs && node e2e/encomenda.test.mjs && node e2e/fiado.test.mjs && node e2e/fiado.test.mjs Desktop && node e2e/vitrine.test.mjs && node e2e/rapido.test.mjs && node e2e/fotos.test.mjs && node e2e/fotos-repetidas.test.mjs && node e2e/estoque.test.mjs && node e2e/estoque-tela.test.mjs && node e2e/vitrine-tela.test.mjs && node e2e/relogin.test.mjs && node e2e/catalogo-responsivo.test.mjs"
+    "test:e2e": "node e2e/smoke.test.mjs && node e2e/flow.test.mjs && node e2e/encomenda.test.mjs && node e2e/fiado.test.mjs && node e2e/fiado.test.mjs Desktop && node e2e/vitrine.test.mjs && node e2e/rapido.test.mjs && node e2e/fotos.test.mjs && node e2e/fotos-repetidas.test.mjs && node e2e/estoque.test.mjs && node e2e/estoque-tela.test.mjs && node e2e/vitrine-tela.test.mjs && node e2e/relogin.test.mjs && node e2e/catalogo-responsivo.test.mjs && node e2e/troca.test.mjs"
   },
   "devDependencies": {
     "@electric-sql/pglite": "0.5.11",

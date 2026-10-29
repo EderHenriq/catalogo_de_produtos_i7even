@@ -360,10 +360,20 @@ export function openVitrineItem(productId, { onDone } = {}) {
     }
   }
 
-  async function run(fn, ok) {
-    if (busy) return;
-    busy = true;
-    try { await fn(); if (ok) toast(ok, { duration: 1800 }); onDone?.(); } catch (err) { toastError('Não foi possível salvar', friendlyError(err)); } finally { busy = false; render(); }
+  /*
+   * Fila: toques seguidos (duas chaves, duas setas) gravam um depois do
+   * outro - nenhum se perde - e cada um lê o produto atualizado na hora de
+   * gravar (fn recebe o produto fresco), sem sobrescrever o anterior.
+   */
+  let queue = Promise.resolve();
+  function run(fn, ok) {
+    queue = queue.then(async () => {
+      busy = true;
+      try { await fn(product()); if (ok) toast(ok, { duration: 1800 }); onDone?.(); }
+      catch (err) { toastError('Não foi possível salvar', friendlyError(err)); }
+      finally { busy = false; render(); }
+    });
+    return queue;
   }
 
   modal.body.addEventListener('click', (e) => {
@@ -384,9 +394,9 @@ export function openVitrineItem(productId, { onDone } = {}) {
         const old = key === '' ? modelPhotos(p) : photosOfColor(p, key);
         const next = [...picks, ...old.filter((u) => !picks.includes(u))];
         ordering = null; picks = [];
-        run(async () => {
-          if (key === '') await Data.saveProduct({ ...p, imageUrl: next[0] || '', gallery: next.slice(1) });
-          else { await Data.setColorPhotos(p.id, key, next); await followCover(old[0], next[0]); }
+        run(async (cur) => {
+          if (key === '') await Data.saveProduct({ ...cur, imageUrl: next[0] || '', gallery: next.slice(1) });
+          else { await Data.setColorPhotos(cur.id, key, next); await followCover(old[0], next[0]); }
         }, 'Ordem das fotos salva');
         return;
       }
@@ -405,22 +415,29 @@ export function openVitrineItem(productId, { onDone } = {}) {
     }
     const mv = t.closest('[data-move]');
     if (mv && !mv.disabled) {
-      const list = colorsOf(p);
-      const i = Number(mv.dataset.move);
-      const j = i + Number(mv.dataset.dir);
-      if (j < 0 || j >= list.length) return;
-      [list[i], list[j]] = [list[j], list[i]];
-      run(() => Data.saveProduct({ ...p, colors: list }), 'Ordem das cores salva');
+      const color = mv.closest('[data-row]')?.dataset.row;
+      const dir = Number(mv.dataset.dir);
+      run((cur) => {
+        // a posição sai da lista de agora (outra seta pode ter mexido antes)
+        const list = colorsOf(cur);
+        const i = list.indexOf(color);
+        const j = i + dir;
+        if (i < 0 || j < 0 || j >= list.length) return null;
+        [list[i], list[j]] = [list[j], list[i]];
+        return Data.saveProduct({ ...cur, colors: list });
+      }, 'Ordem das cores salva');
       return;
     }
     const cv = t.closest('[data-cover]');
     if (cv) {
       const c = cv.dataset.cover;
       if (c === '_model' || c === coverChoice(p)) return;
-      let gallery = p.gallery || [];
-      // foto própria do modelo não se perde: vai para as fotos do modelo
-      if (coverChoice(p) === '_model' && !gallery.includes(p.imageUrl)) gallery = [p.imageUrl, ...gallery].slice(0, 8);
-      run(() => Data.saveProduct({ ...p, imageUrl: c ? photosOfColor(p, c)[0] : '', gallery }), c ? `Cartão com a foto ${c}` : 'Foto do cartão automática');
+      run((cur) => {
+        let gallery = cur.gallery || [];
+        // foto própria do modelo não se perde: vai para as fotos do modelo
+        if (coverChoice(cur) === '_model' && !gallery.includes(cur.imageUrl)) gallery = [cur.imageUrl, ...gallery].slice(0, 8);
+        return Data.saveProduct({ ...cur, imageUrl: c ? photosOfColor(cur, c)[0] : '', gallery });
+      }, c ? `Cartão com a foto ${c}` : 'Foto do cartão automática');
       return;
     }
     if (t.closest('[data-sell]')) { openQuickProduct({ productId: p.id, onDone: () => { render(); onDone?.(); } }); }
@@ -428,9 +445,10 @@ export function openVitrineItem(productId, { onDone } = {}) {
   modal.body.addEventListener('change', (e) => {
     const t = e.target;
     const p = product();
-    if (t.matches('[data-p-show]')) { run(() => Data.patchProducts([p.id], { showInCatalog: t.checked }), t.checked ? 'Aparece no catálogo' : 'Escondido do catálogo'); return; }
-    if (t.matches('[data-p-feat]')) { run(() => Data.patchProducts([p.id], { featured: t.checked }), t.checked ? 'Em destaque' : 'Sem destaque'); return; }
-    if (t.matches('[data-v-show]')) { run(() => Data.patchVariants([t.dataset.vShow], { showInCatalog: t.checked }), t.checked ? 'Versão à mostra' : 'Versão escondida'); }
+    const on = t.checked;
+    if (t.matches('[data-p-show]')) { run(() => Data.patchProducts([p.id], { showInCatalog: on }), on ? 'Aparece no catálogo' : 'Escondido do catálogo'); return; }
+    if (t.matches('[data-p-feat]')) { run(() => Data.patchProducts([p.id], { featured: on }), on ? 'Em destaque' : 'Sem destaque'); return; }
+    if (t.matches('[data-v-show]')) { const id = t.dataset.vShow; run(() => Data.patchVariants([id], { showInCatalog: on }), on ? 'Versão à mostra' : 'Versão escondida'); }
   });
   modal.foot.querySelector('[data-full]').addEventListener('click', async () => {
     const m = await import('./products.js');

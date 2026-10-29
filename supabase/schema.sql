@@ -483,7 +483,7 @@ create trigger product_variants_guard_trg before insert or update on public.prod
 create table if not exists public.stock_movements (
   id          bigint generated always as identity primary key,
   variant_id  uuid not null references public.product_variants (id) on delete cascade,
-  kind        text not null check (kind in ('inicial', 'entrada', 'venda', 'ajuste', 'baixa')),
+  kind        text not null check (kind in ('inicial', 'entrada', 'venda', 'ajuste', 'baixa', 'troca')),
   qty         int not null check (qty <> 0),
   unit_cost   numeric(12,4),
   unit_id     uuid,
@@ -497,6 +497,11 @@ create table if not exists public.stock_movements (
 );
 
 create index if not exists stock_movements_variant_idx on public.stock_movements (variant_id, created_at desc);
+
+-- 'troca': aparelho que o cliente deu como entrada no pagamento (register_trade_in)
+alter table public.stock_movements drop constraint if exists stock_movements_kind_check;
+alter table public.stock_movements add constraint stock_movements_kind_check
+  check (kind in ('inicial', 'entrada', 'venda', 'ajuste', 'baixa', 'troca'));
 create index if not exists stock_movements_order_idx on public.stock_movements (order_id);
 create index if not exists stock_movements_purchase_idx on public.stock_movements (purchase_id);
 
@@ -707,6 +712,12 @@ create table if not exists public.payments (
   created_at timestamptz not null default now()
 );
 
+-- Aparelho na troca: o aparelho que o cliente deu como (parte do) pagamento.
+-- trade_item guarda a descrição como foi (modelo, cor, IMEI, bateria...);
+-- trade_unit_id aponta o aparelho que entrou no estoque (modelo com IMEI).
+alter table public.payments add column if not exists trade_unit_id uuid references public.units (id) on delete set null;
+alter table public.payments add column if not exists trade_item jsonb;
+
 create index if not exists payments_order_idx on public.payments (order_id);
 create index if not exists payments_date_idx on public.payments (paid_at desc);
 
@@ -776,7 +787,8 @@ begin
   new.subtotal   := round(sub, 2);
   new.cost_total := round(cost, 2);
   new.total      := round(sub - coalesce(new.discount, 0) + coalesce(new.shipping_cost, 0), 2);
-  new.profit     := round(sub - coalesce(new.discount, 0) - cost - coalesce(new.shipping_expense, 0), 2);
+  -- lucro = o que o cliente paga (total, com o frete cobrado) − custo − frete que a loja pagou
+  new.profit     := round(sub - coalesce(new.discount, 0) + coalesce(new.shipping_cost, 0) - cost - coalesce(new.shipping_expense, 0), 2);
   new.paid_amount := round(pago, 2);
 
   if new.total > 0 and new.paid_amount >= new.total then
@@ -789,7 +801,12 @@ begin
     new.payment_status := 'pendente';
   end if;
 
-  new.updated_at := now();
+  -- recálculo de migração (i7even.migrating) não conta como "pedido mexido"
+  if tg_op = 'UPDATE' and coalesce(current_setting('i7even.migrating', true), '') = 'on' then
+    new.updated_at := old.updated_at;
+  else
+    new.updated_at := now();
+  end if;
   new.user_id    := coalesce(new.user_id, auth.uid());
 
   -- Fiado: "Pago" e "Finalizado" só com tudo recebido. Entregue sem quitar
@@ -826,6 +843,19 @@ drop trigger if exists orders_compute_totals_trg on public.orders;
 create trigger orders_compute_totals_trg
   before insert or update on public.orders
   for each row execute function public.orders_compute_totals();
+
+-- Lucro antigo dos pedidos com frete cobrado: refeito com a conta nova
+-- (antes o frete cobrado do cliente não entrava). Idempotente.
+do $$
+begin
+  perform set_config('i7even.migrating', 'on', true);
+  update public.orders
+     set profit = round(subtotal - discount + shipping_cost - cost_total - shipping_expense, 2)
+   where shipping_cost > 0
+     and profit is distinct from round(subtotal - discount + shipping_cost - cost_total - shipping_expense, 2);
+  perform set_config('i7even.migrating', 'off', true);
+end;
+$$;
 
 create or replace function public.orders_lock_owner()
 returns trigger
@@ -1483,6 +1513,10 @@ begin
 
   update public.orders set updated_at = now() where id = v_id returning * into v_row;
 
+  if v_row.total < 0 then
+    raise exception 'O desconto é maior que o valor do pedido (itens + frete). Confira o desconto.';
+  end if;
+
   -- O combinado tem de fechar com o total (a tela redistribui quando o pedido muda).
   select sum(amount) into v_plan from public.order_installments where order_id = v_id;
   if v_plan is not null and v_row.status not in ('orcamento', 'cancelado') and abs(v_plan - v_row.total) > 0.05 then
@@ -1495,6 +1529,169 @@ $$;
 
 revoke all on function public.save_order(jsonb) from public, anon;
 grant execute on function public.save_order(jsonb) to authenticated;
+
+/*
+ * Aparelho na troca (o cliente dá o aparelho dele como parte do pagamento):
+ * numa transação só, o pagamento entra no pedido (forma "Aparelho na troca",
+ * valor = o que a loja deu) e o aparelho entra no estoque como seminovo com
+ * esse valor de custo - modelo com IMEI vira um aparelho (IMEI e bateria
+ * opcionais); por quantidade, +1 no saldo (custo médio). Reenviar (internet
+ * caiu depois de gravar) não duplica: o id do pagamento nasce no aparelho.
+ */
+create or replace function public.register_trade_in(p jsonb)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_order  public.orders;
+  v_prod   public.products;
+  v_var    public.product_variants;
+  v_amount numeric := round(coalesce(nullif(p ->> 'amount', '')::numeric, 0), 2);
+  v_pid    uuid := nullif(p ->> 'product_id', '')::uuid;
+  v_payid  uuid := coalesce(nullif(p ->> 'id', '')::uuid, gen_random_uuid());
+  v_serial text := nullif(left(btrim(coalesce(p ->> 'serial', '')), 40), '');
+  v_bat    smallint := nullif(p ->> 'battery_health', '')::smallint;
+  v_cond   text := coalesce(nullif(btrim(coalesce(p ->> 'condition', '')), ''), 'Seminovo');
+  v_stock  boolean := coalesce((p ->> 'to_stock')::boolean, true);
+  v_vid    uuid;
+  v_uid    uuid;
+  v_item   jsonb;
+  v_note   text;
+begin
+  perform public.require_member();
+  select * into v_order from public.orders where id = nullif(p ->> 'order_id', '')::uuid for update;
+  if not found then raise exception 'Pedido não encontrado.'; end if;
+  if v_amount <= 0 then raise exception 'Informe quanto vale o aparelho na troca.'; end if;
+  if v_bat is not null and (v_bat < 0 or v_bat > 100) then raise exception 'Bateria entre 0 e 100%%.'; end if;
+  if exists (select 1 from public.payments where id = v_payid) then
+    return (select jsonb_build_object('payment_id', id, 'unit_id', trade_unit_id) from public.payments where id = v_payid);
+  end if;
+  if v_pid is not null then
+    select * into v_prod from public.products where id = v_pid;
+    if not found then raise exception 'O modelo do aparelho não existe mais.'; end if;
+  end if;
+
+  v_item := jsonb_build_object(
+    'product_id', v_pid,
+    'product_name', coalesce(v_prod.name, nullif(left(btrim(coalesce(p ->> 'product_name', '')), 120), ''), 'Aparelho'),
+    'storage', nullif(left(btrim(coalesce(p ->> 'storage', '')), 40), ''),
+    'color', nullif(left(btrim(coalesce(p ->> 'color', '')), 40), ''),
+    'condition', v_cond,
+    'serial', v_serial,
+    'battery_health', v_bat,
+    'notes', nullif(left(btrim(coalesce(p ->> 'notes', '')), 300), ''),
+    'to_stock', v_stock and v_pid is not null);
+  v_note := left(concat_ws(' · ', 'Troca no pedido #' || lpad(v_order.code::text, 4, '0'), v_order.customer_name, v_item ->> 'notes'), 240);
+
+  if v_stock and v_pid is not null then
+    v_vid := public._variant_find_or_create(v_pid, v_item ->> 'storage', v_item ->> 'color', '', v_cond, 0);
+    if v_prod.tracks_serial then
+      if v_serial is not null and exists (select 1 from public.units where upper(btrim(serial)) = upper(v_serial) and status = 'estoque') then
+        raise exception 'O IMEI % já está no estoque.', v_serial;
+      end if;
+      insert into public.units (variant_id, serial, cost, origin, battery_health, notes)
+      values (v_vid, v_serial, v_amount, 'Troca (cliente)', v_bat, v_note)
+      returning id into v_uid;
+      insert into public.stock_movements (variant_id, kind, qty, unit_cost, unit_id, order_id, note)
+      values (v_vid, 'troca', 1, v_amount, v_uid, v_order.id, v_note);
+      perform public._variant_sync(v_vid);
+    else
+      select * into v_var from public.product_variants where id = v_vid for update;
+      update public.product_variants
+         set cost = round((greatest(v_var.stock, 0) * coalesce(v_var.cost, 0) + v_amount) / (greatest(v_var.stock, 0) + 1), 4),
+             stock = stock + 1
+       where id = v_vid;
+      insert into public.stock_movements (variant_id, kind, qty, unit_cost, order_id, prev_cost, new_cost, note)
+      values (v_vid, 'troca', 1, v_amount, v_order.id, v_var.cost,
+              round((greatest(v_var.stock, 0) * coalesce(v_var.cost, 0) + v_amount) / (greatest(v_var.stock, 0) + 1), 4), v_note);
+    end if;
+    v_item := v_item || jsonb_build_object('variant_id', v_vid);
+  end if;
+
+  insert into public.payments (id, order_id, paid_at, amount, method, note, trade_unit_id, trade_item)
+  values (v_payid, v_order.id, coalesce(nullif(p ->> 'paid_at', '')::date, current_date), v_amount, 'Aparelho na troca',
+          left(concat_ws(' · ', v_item ->> 'product_name', v_item ->> 'storage', v_item ->> 'color', v_cond), 160), v_uid, v_item);
+
+  return jsonb_build_object('payment_id', v_payid, 'unit_id', v_uid, 'variant_id', v_vid);
+end;
+$$;
+
+revoke all on function public.register_trade_in(jsonb) from public, anon;
+grant execute on function public.register_trade_in(jsonb) to authenticated;
+
+/*
+ * Pagamento com aparelho na troca: o valor não muda depois (o custo do
+ * aparelho no estoque saiu dele - exclua e lance de novo).
+ */
+create or replace function public.payments_trade_guard()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  if old.trade_item is not null and new.amount is distinct from old.amount then
+    raise exception 'O valor do aparelho na troca não muda: exclua este pagamento e lance a troca de novo.';
+  end if;
+  return new;
+end;
+$$;
+
+drop trigger if exists payments_trade_guard_trg on public.payments;
+create trigger payments_trade_guard_trg
+  before update on public.payments
+  for each row execute function public.payments_trade_guard();
+
+/*
+ * Excluiu o pagamento da troca (ou o pedido inteiro): o aparelho sai do
+ * estoque de novo - menos se já foi vendido/baixado; aí o banco recusa e
+ * nada é apagado. Roda DEPOIS da exclusão: o pagamento já não aponta para o
+ * aparelho que vai ser removido.
+ */
+create or replace function public.payments_trade_undo()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_unit public.units;
+  v_var  public.product_variants;
+  v_vid  uuid;
+begin
+  if old.trade_item is null then return old; end if;
+  if old.trade_unit_id is not null then
+    select * into v_unit from public.units where id = old.trade_unit_id for update;
+    if found then
+      if v_unit.status <> 'estoque' then
+        raise exception 'O aparelho que entrou na troca já saiu do estoque (vendido ou baixado): a troca não pode ser desfeita.';
+      end if;
+      delete from public.stock_movements where unit_id = v_unit.id;
+      delete from public.units where id = v_unit.id;
+      perform public._variant_sync(v_unit.variant_id);
+    end if;
+  elsif coalesce((old.trade_item ->> 'to_stock')::boolean, false) and old.trade_item ? 'variant_id' then
+    v_vid := (old.trade_item ->> 'variant_id')::uuid;
+    select * into v_var from public.product_variants where id = v_vid for update;
+    if found then
+      if v_var.stock < 1 then
+        raise exception 'O aparelho que entrou na troca já saiu do estoque: a troca não pode ser desfeita.';
+      end if;
+      update public.product_variants set stock = stock - 1 where id = v_vid;
+      insert into public.stock_movements (variant_id, kind, qty, unit_cost, note)
+      values (v_vid, 'ajuste', -1, coalesce(v_var.cost, 0), 'Troca desfeita (pagamento excluído)');
+    end if;
+  end if;
+  return old;
+end;
+$$;
+
+drop trigger if exists payments_trade_undo_trg on public.payments;
+create trigger payments_trade_undo_trg
+  after delete on public.payments
+  for each row execute function public.payments_trade_undo();
 
 /* Troca a situação do pedido mexendo no estoque (e conferindo os IMEIs). */
 create or replace function public.set_order_status(p_id uuid, p_status text)
@@ -1955,8 +2152,8 @@ begin
   perform public.require_member();
   select * into v_unit from public.units where id = (p ->> 'id')::uuid for update;
   if not found then raise exception 'Aparelho não encontrado.'; end if;
-  if v_serial is null then raise exception 'O IMEI / número de série não pode ficar vazio.'; end if;
-  if v_unit.status = 'estoque' and exists (
+  -- IMEI é opcional: dá para anotar bateria/custo de um aparelho sem IMEI
+  if v_serial is not null and v_unit.status = 'estoque' and exists (
        select 1 from public.units where upper(btrim(serial)) = upper(v_serial) and status = 'estoque' and id <> v_unit.id) then
     raise exception 'O IMEI % já está no estoque em outro aparelho.', v_serial;
   end if;

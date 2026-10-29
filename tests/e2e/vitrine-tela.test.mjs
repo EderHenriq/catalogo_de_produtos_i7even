@@ -97,7 +97,8 @@ ok(r[0].colors.indexOf('Azul') === iAzul - 1, `Azul subiu uma posição (${befor
 await top().locator('.vit-version', { hasText: 'Azul' }).locator('.switch').tap();
 r = await waitDb(`select show_in_catalog from public.product_variants where id = '${vEnc.id}'`, (x) => x[0].show_in_catalog === false);
 ok(r[0].show_in_catalog === false, 'versão de encomenda Azul escondida');
-await top().locator('[data-p-feat]').evaluate((el) => el.closest('label').click());
+await page.waitForTimeout(500);   // a ficha termina de redesenhar depois da gravação anterior
+await top().locator('label.check-row', { has: page.locator('[data-p-feat]') }).tap();
 r = await waitDb(`select featured from public.products where id = '${p13.id}'`, (x) => x[0].featured === true);
 ok(r[0].featured === true, 'em destaque');
 await page.screenshot({ path: `${SHOTS}vitrine-tela-ficha.png` });
