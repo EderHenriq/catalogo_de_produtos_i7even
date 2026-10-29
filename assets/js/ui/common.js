@@ -4,7 +4,7 @@ import * as Data from '../core/data.js';
 import { variantLabel, stockLevel } from '../core/calc.js';
 import { friendlyError } from '../core/errors.js';
 import { esc, money, thumbUrl } from '../core/utils.js';
-import { toastError } from './kit.js';
+import { toast, toastError, openModal } from './kit.js';
 import { icon } from './icons.js';
 
 /* ------------------------------------------------------------- busca --- */
@@ -205,9 +205,9 @@ const MAX_PHOTOS = 9;   // capa + 8 extras (products.gallery ≤ 8)
  *   - "Tornar capa" e "Remover" em cada foto; arrastar/colar no computador.
  *
  * @param {HTMLElement} box
- * @param {{ cover?: string, gallery?: string[], label?: string }} opts
+ * @param {{ cover?: string, gallery?: string[], label?: string, max?: number }} opts
  */
-export function mountGalleryField(box, { cover = '', gallery = [], label = 'Foto' } = {}) {
+export function mountGalleryField(box, { cover = '', gallery = [], label = 'Foto', max = MAX_PHOTOS } = {}) {
   let photos = [cover, ...gallery].filter(Boolean);
   const original = new Set(photos);
   const uploaded = new Set();
@@ -231,7 +231,7 @@ export function mountGalleryField(box, { cover = '', gallery = [], label = 'Foto
               </div>
             </div>`).join('')}
           ${busy ? `<div class="gallery-tile is-busy"><span class="spinner"></span><span class="xs">Enviando ${done + 1} de ${done + queue}</span></div>` : ''}
-          ${photos.length + queue < MAX_PHOTOS ? `
+          ${photos.length + queue < max ? `
             <div class="gallery-add" data-drop>
               ${TOUCH.matches ? `
                 <label class="gallery-add-btn">${icon('camera')}<span>Câmera</span>
@@ -244,12 +244,12 @@ export function mountGalleryField(box, { cover = '', gallery = [], label = 'Foto
         </div>
         <label class="check xs"><input type="checkbox" data-square ${square ? 'checked' : ''}><span class="box"></span>
           <span>Enquadrar com fundo branco <span class="dim">(recomendado: o catálogo fica alinhado)</span></span></label>
-        ${TOUCH.matches ? '' : `<span class="xs dim">Arraste fotos para cá ou cole (Ctrl+V). Até ${MAX_PHOTOS} fotos; a primeira é a capa.</span>`}
+        ${TOUCH.matches ? '' : `<span class="xs dim">Arraste fotos para cá ou cole (Ctrl+V). Até ${max} fotos; a primeira é a capa.</span>`}
       </div>`;
   }
 
   async function take(files) {
-    const list = [...(files || [])].filter((f) => /^image\//.test(f.type || 'image/')).slice(0, MAX_PHOTOS - photos.length - queue);
+    const list = [...(files || [])].filter((f) => /^image\//.test(f.type || 'image/')).slice(0, max - photos.length - queue);
     if (!list.length) return;
     queue += list.length;
     render();
@@ -310,6 +310,52 @@ export function mountGalleryField(box, { cover = '', gallery = [], label = 'Foto
     },
     dispose() { document.removeEventListener('paste', onPaste); },
   };
+}
+
+/**
+ * Fotos de UMA cor do modelo (as que o cliente vê ao escolher a cor no
+ * catálogo): várias, a primeira é a principal, trocar a ordem, remover e
+ * adicionar - Estoque e ficha do modelo. A foto que uma variação dessa cor
+ * guardava sozinha entra na lista (e sai da variação ao salvar). Sem cor
+ * (ex.: perfume, acessório): as fotos do próprio modelo.
+ */
+export function openColorPhotos(product, color, { onDone } = {}) {
+  const p = Data.product(product.id) || product;
+  const own = color ? Data.variantsOf(p.id).filter((v) => v.color === color && v.imageUrl).map((v) => v.imageUrl) : [];
+  const start = color ? [...new Set([...(p.colorPhotos?.[color] || []), ...own])] : [p.imageUrl, ...(p.gallery || [])].filter(Boolean);
+  let saved = false;
+  let field = null;
+  const modal = openModal({
+    title: color ? `Fotos · ${color}` : 'Fotos do modelo',
+    subtitle: p.name,
+    size: 'lg',
+    body: `<p class="small muted" style="margin:0 0 12px">${color ? `O cliente vê estas fotos ao escolher <b>${esc(color)}</b> no catálogo.` : 'As fotos do modelo no catálogo.'} A primeira é a principal (estrela = tornar principal).</p><div data-g></div>`,
+    footer: '<button class="btn btn-ghost" data-close>Cancelar</button><button class="btn btn-primary" data-ok>Salvar fotos</button>',
+    // fechou sem salvar: as fotos que subiram agora saem do Storage
+    onClose: () => {
+      if (!saved && field) field.toDelete(false).forEach((u) => Data.deleteProductImage(u));
+      field?.dispose();
+    },
+  });
+  field = mountGalleryField(modal.body.querySelector('[data-g]'), { cover: start[0] || '', gallery: start.slice(1), label: color || p.name, max: color ? 8 : MAX_PHOTOS });
+  modal.foot.querySelector('[data-ok]').addEventListener('click', async (e) => {
+    if (field.busy) { toast('Espere as fotos terminarem de subir', { kind: 'warn' }); return; }
+    const btn = e.currentTarget;
+    btn.disabled = true;
+    try {
+      if (!color) { if (field.dirty) await Data.saveProduct({ ...(Data.product(p.id) || p), imageUrl: field.cover, gallery: field.gallery }); }
+      else if (field.dirty || own.length) await Data.setColorPhotos(p.id, color, [field.cover, ...field.gallery]);
+      field.toDelete(true).forEach((u) => Data.deleteProductImage(u));
+      saved = true;
+      modal.close();
+      toast(color ? `Fotos da cor ${color} salvas` : 'Fotos salvas', { text: 'Já aparecem no catálogo.' });
+      onDone?.();
+    } catch (err) {
+      btn.disabled = false;
+      toastError('Não consegui salvar as fotos', friendlyError(err));
+    }
+  });
+  return modal;
 }
 
 /**

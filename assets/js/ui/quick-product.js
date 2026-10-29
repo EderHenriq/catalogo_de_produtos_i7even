@@ -22,14 +22,14 @@ import { pref, setPref, mountPhotoField } from './common.js';
 const MONEY_ATTRS = 'inputmode="numeric" autocomplete="off" placeholder="0,00"';
 const norm = (s) => String(s || '').normalize('NFD').replace(/\p{Diacritic}/gu, '').toLowerCase().trim();
 
-export function openQuickProduct({ productId = null, categoryId = null, onDone } = {}) {
+export function openQuickProduct({ productId = null, categoryId = null, mode = null, onDone } = {}) {
   const p0 = productId ? Data.product(productId) : null;
   const cats = Data.categories().filter((c) => c.active);
   const s = {
     categoryId: p0?.categoryId || categoryId || pref('quick.cat', cats.find((c) => c.slug === 'iphone')?.id || cats[0]?.id || null),
     name: p0?.name || '',
     photo: null,
-    mode: pref('quick.mode', 'pronta'),
+    mode: mode || pref('quick.mode', 'pronta'),
     lead: pref('olist.lead', '7 a 15 dias'),
     condition: pref('quick.cond', 'Lacrado'),
     sizes: new Set(),       // versão / caixa (PS5 com leitor ou digital, Watch 42mm...)

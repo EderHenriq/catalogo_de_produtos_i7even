@@ -977,3 +977,19 @@ body.catalog { background: var(--cat-page); isolation: isolate; }
   .cat-mini, .cat-fab-bag { --glass-blur: blur(14px) saturate(170%); }
   .cat-ambient i { animation: none; will-change: auto; }
 }
+
+/* Barra do topo no escuro: o vidro ganha um tom escuro por baixo - foto
+   clara passando atrás não apaga mais o nome da loja nem os ícones. */
+:root[data-theme='dark'] .cat-mini { background: linear-gradient(180deg, rgba(14, 15, 17, .78), rgba(14, 15, 17, .6)); }
+@media (prefers-color-scheme: dark) { :root:not([data-theme='light']) .cat-mini { background: linear-gradient(180deg, rgba(14, 15, 17, .78), rgba(14, 15, 17, .6)); } }
+
+/* Fechar da ficha: fica SEMPRE sobre a foto (fundo claro), então é vidro
+   escuro com o X branco nos dois temas - no escuro ele era branco no branco. */
+.cat-close, :root[data-theme='dark'] .cat-close {
+  background: linear-gradient(140deg, rgba(20, 21, 24, .72), rgba(20, 21, 24, .52));
+  border: 1px solid rgba(255, 255, 255, .22);
+  color: #fff;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .28), 0 6px 18px -6px rgba(0, 0, 0, .45);
+  -webkit-backdrop-filter: blur(14px) saturate(170%); backdrop-filter: blur(14px) saturate(170%);
+}
+.cat-close:hover { background: linear-gradient(140deg, rgba(20, 21, 24, .86), rgba(20, 21, 24, .68)); }

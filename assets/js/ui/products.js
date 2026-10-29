@@ -21,7 +21,7 @@ import { openModal, confirmDialog, toast, toastError, withLoading, emptyState, o
 import { icon } from './icons.js';
 import {
   matches, productThumb, stockBadge, variantStockBadge, code, moneyHTML, priceRangeHTML, catalogUrl,
-  mountPhotoField, mountGalleryField, quickPhoto, pref, setPref, listToText, textToList,
+  mountPhotoField, mountGalleryField, quickPhoto, pref, setPref, listToText, textToList, openColorPhotos,
 } from './common.js';
 
 const MONEY_ATTRS = 'inputmode="numeric" autocomplete="off" placeholder="0,00"';
@@ -380,12 +380,14 @@ export function openProductSheet(productId) {
     if (!colors.length) return '';
     return `
       <div class="fieldset">
-        <div class="fieldset-title">Fotos por cor <span class="dim small" style="font-weight:400;text-transform:none;letter-spacing:0">o cliente vê a foto da cor que escolher</span></div>
+        <div class="fieldset-title">Fotos por cor <span class="dim small" style="font-weight:400;text-transform:none;letter-spacing:0">toque para ver, trocar, ordenar ou apagar</span></div>
         <div class="color-photos">
           ${colors.map((c) => {
-            const photo = p.colorPhotos?.[c]?.[0] || active.find((v) => v.color === c && v.imageUrl)?.imageUrl;
-            return `<button type="button" class="color-photo${photo ? ' has-photo' : ''}" data-color-photo="${esc(c)}" aria-label="Foto da cor ${esc(c)}">
-              <span class="color-photo-img">${photo ? `<span class="thumb thumb-md"><img src="${esc(thumbUrl(photo))}" data-full="${esc(photo)}" alt="" loading="lazy"></span>` : icon('camera')}</span>
+            const photo = active.find((v) => v.color === c && v.imageUrl)?.imageUrl || p.colorPhotos?.[c]?.[0];
+            const n = new Set([...(p.colorPhotos?.[c] || []), ...active.filter((v) => v.color === c && v.imageUrl).map((v) => v.imageUrl)]).size;
+            return `<button type="button" class="color-photo${photo ? ' has-photo' : ''}" data-color-photo="${esc(c)}" aria-label="Fotos da cor ${esc(c)}">
+              <span class="color-photo-img">${photo ? `<span class="thumb thumb-md"><img src="${esc(thumbUrl(photo))}" data-full="${esc(photo)}" alt="" loading="lazy"></span>` : icon('camera')}
+                ${n > 1 ? `<span class="color-photo-n">${n}</span>` : ''}</span>
               <span class="color-photo-name">${esc(c)}</span></button>`;
           }).join('')}
         </div>
@@ -433,25 +435,7 @@ export function openProductSheet(productId) {
       return;
     }
     const cp = t.closest('[data-color-photo]');
-    if (cp) {
-      const color = cp.dataset.colorPhoto;
-      const input = document.createElement('input');
-      input.type = 'file';
-      input.accept = 'image/*';
-      input.addEventListener('change', async () => {
-        const f = input.files?.[0];
-        if (!f) return;
-        cp.classList.add('is-busy');
-        try {
-          const url = await Data.uploadProductImage(f, { square: true });
-          const n = await Data.setColorPhoto(p.id, color, url);
-          toast(`Foto da cor ${color}`, { text: n ? `Vale para ${n} ${n === 1 ? 'variação' : 'variações'} (pronta entrega e encomenda) e para as próximas.` : 'Vale para tudo que entrar nessa cor (pronta entrega e encomenda).' });
-          render();
-        } catch (err) { toastError('Não consegui salvar a foto', friendlyError(err)); cp.classList.remove('is-busy'); }
-      });
-      input.click();
-      return;
-    }
+    if (cp) { openColorPhotos(p, cp.dataset.colorPhoto, { onDone: render }); return; }
     const v = t.closest('[data-variant]');
     if (v) { openVariantSheet(v.dataset.variant, { onChange: render }); return; }
     if (t.closest('[data-toggle-prices]')) { editingPrices = !editingPrices; render(); return; }
@@ -1318,7 +1302,7 @@ export function openAddUnits(v, { onDone } = {}) {
 
 /* ------------------------------------------------ corrigir aparelho -- */
 
-function openUnitForm(u, { onDone } = {}) {
+export function openUnitForm(u, { onDone } = {}) {
   const modal = openModal({
     title: 'Dados do aparelho',
     subtitle: Data.variantTitle(Data.variant(u.variantId)),

@@ -928,6 +928,29 @@ export async function setColorPhoto(productId, color, url) {
 }
 
 /**
+ * TODAS as fotos de uma cor, na ordem (a primeira é a principal) - o editor
+ * de fotos da ficha do Estoque e da ficha do modelo. A foto própria que as
+ * variações dessa cor guardavam sai: senão ela continuaria vencendo no
+ * catálogo e a troca não apareceria. Lista vazia tira as fotos da cor.
+ */
+export async function setColorPhotos(productId, color, urls) {
+  const p = product(productId);
+  if (!p || !color) return;
+  const next = { ...(p.colorPhotos || {}) };
+  const list = [...new Set((urls || []).filter(Boolean))].slice(0, 8);
+  if (list.length) next[color] = list; else delete next[color];
+  mute('products');
+  const { error } = await getClient().from('products').update({ color_photos: next }).eq('id', productId);
+  if (error) throw error;
+  const ids = state.variants.filter((v) => v.productId === productId && v.color === color && v.imageUrl).map((v) => v.id);
+  if (ids.length) {
+    const { error: e2 } = await getClient().from('product_variants').update({ image_url: null }).in('id', ids);
+    if (e2) throw e2;
+  }
+  await reload('products');
+}
+
+/**
  * Fotos do modelo de uma vez (importar pasta de fotos): capa, fotos por cor
  * e cores novas. `reloadAfter: false` deixa para recarregar no fim do lote.
  */

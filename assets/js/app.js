@@ -22,6 +22,7 @@ import { esc, debounce, installThumbFallback } from './core/utils.js';
 import * as Dashboard from './ui/dashboard.js';
 import * as Orders from './ui/orders.js';
 import * as Products from './ui/products.js';
+import * as Stock from './ui/stock.js';
 import * as Purchases from './ui/purchases.js';
 import * as Customers from './ui/customers.js';
 import * as Categories from './ui/categories.js';
@@ -35,16 +36,18 @@ const ROOT = document.getElementById('app');
 
 /*
  * Menu: Loja (o dia a dia) · Estoque · Gestão, com Ajustes por último.
- * `tab: true` = aparece na barra de baixo do celular.
+ * `tab: true` = aparece na barra de baixo do celular (Painel, Pedidos,
+ * Estoque, Catálogo + "Mais"); o resto fica no "Mais".
  */
 const ROUTES = [
   { id: 'dashboard',  label: 'Painel',     icon: 'dashboard', module: Dashboard,    group: 'Loja',    tab: true },
   { id: 'pedidos',    label: 'Pedidos',    icon: 'orders',    module: Orders,       group: 'Loja',    tab: true, search: true },
   { id: 'receber',    label: 'A receber',  icon: 'wallet',    module: Receivables,  group: 'Loja' },
-  { id: 'clientes',   label: 'Clientes',   icon: 'users',     module: Customers,    group: 'Loja',    tab: true, search: true },
-  { id: 'produtos',   label: 'Produtos',   icon: 'box',       module: Products,     group: 'Estoque', tab: true, search: true },
+  { id: 'clientes',   label: 'Clientes',   icon: 'users',     module: Customers,    group: 'Loja',    search: true },
+  { id: 'estoque',    label: 'Estoque',    icon: 'layers',    module: Stock,        group: 'Estoque', tab: true, search: true },
+  { id: 'produtos',   label: 'Produtos',   icon: 'box',       module: Products,     group: 'Estoque', search: true },
   { id: 'entradas',   label: 'Entradas',   icon: 'truck',     module: Purchases,    group: 'Estoque' },
-  { id: 'catalogo',   label: 'Catálogo',   icon: 'store',     module: CatalogAdmin, group: 'Gestão' },
+  { id: 'catalogo',   label: 'Catálogo',   icon: 'store',     module: CatalogAdmin, group: 'Gestão',  tab: true },
   { id: 'categorias', label: 'Categorias', icon: 'grid',      module: Categories,   group: 'Gestão' },
   { id: 'relatorios', label: 'Relatórios', icon: 'chart',     module: Reports,      group: 'Gestão' },
   { id: 'ajustes',    label: 'Ajustes',    icon: 'settings',  module: Settings,     group: '' },
@@ -311,6 +314,7 @@ const SEARCH_HINT = {
   pedidos: 'Buscar pedido, cliente, IMEI…',
   clientes: 'Buscar cliente ou telefone…',
   produtos: 'Buscar modelo, IMEI, código…',
+  estoque: 'Buscar modelo, cor, IMEI…',
 };
 
 function newOrder() {
