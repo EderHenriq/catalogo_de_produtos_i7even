@@ -253,10 +253,7 @@ function renderApp() {
       <aside class="sidebar" aria-label="Menu principal">
         <div class="brand">
           <div class="brand-mark" role="img" aria-label="${esc(APP.name)}"></div>
-          <div>
-            <span class="brand-wordmark" role="img" aria-label="${esc(APP.name)}"></span>
-            <div class="brand-sub">${esc(APP.subtitle)}</div>
-          </div>
+          <span class="brand-wordmark" role="img" aria-label="${esc(APP.name)}"></span>
         </div>
 
         <button class="btn btn-primary btn-block" data-new style="margin-bottom:12px">
