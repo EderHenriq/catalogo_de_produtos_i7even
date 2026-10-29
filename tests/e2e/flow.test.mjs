@@ -231,7 +231,7 @@ await c.page.screenshot({ path: `${SHOTS}flow-${tag}-11-ficha-catalogo.png` });
 const si = await audit(c.page, 'ficha-catalogo', { mobile: touch }); if (si.length) console.log('    ⚠', si.join('\n    ⚠ '));
 await ctap(c.page.locator('[data-add]'));
 await c.page.waitForTimeout(600);
-await ctap(c.page.locator('.cat-top [data-open-bag]'));
+await ctap(c.page.locator('.cat-fab-bag'));
 await c.page.waitForSelector('.cat-form');
 await c.page.locator('.cat-form [name="name"]').fill('Ana Cliente');
 await c.page.locator('.cat-form [name="phone"]').fill('44977776666');

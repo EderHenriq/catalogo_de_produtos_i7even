@@ -59,23 +59,18 @@ await page.waitForSelector('.olist-row');
 const rows = top().locator('.olist-row');
 ok(await rows.count() === 4, `4 ofertas reconhecidas (${await rows.count()})`);
 ok(await top().locator('.olist-unknown li').count() >= 1, 'outra marca listada como "não entendida"');
-const issue = top().locator('.olist-row.has-issue');
-ok(await issue.count() === 1, 'a linha sem cor fica marcada para conferir');
-ok(!(await issue.locator('[data-include]').isChecked()), 'e não sobe enquanto não corrigir');
+const P16P = await one(`select colors from public.products where slug = 'iphone-16-pro'`);
+const allColors = top().locator('.olist-row', { hasText: '16 Pro' });
+ok(await top().locator('.olist-row.has-issue').count() === 0, 'nenhuma linha travada');
+ok((await allColors.innerText()).includes('cliente escolhe') && await allColors.locator('[data-include]').isChecked(),
+  'linha sem cor vira "todas as cores" (o cliente escolhe a cor no catálogo)');
 // custo 3.900 + 10% = 4.290 → arredonda para 4.290 (já múltiplo de 10)
 const firstSale = await rows.nth(0).locator('[data-sale]').inputValue();
 ok(firstSale === '4.290,00', `preço de venda sugerido = custo + margem (${firstSale})`);
 await shot('02-conferir');
 const a2 = await audit(page, 'conferir-lista', { mobile: touch }); if (a2.length) console.log('    ⚠', a2.join('\n    ⚠ '));
 
-console.log('2. corrigir e ajustar o preço de venda');
-const colorSel = issue.locator('select[data-f="color"]');
-const opts = await colorSel.locator('option').allTextContents();
-await colorSel.selectOption({ label: opts[1] });
-await page.waitForTimeout(150);
-ok(await top().locator('.olist-row.has-issue').count() === 0, `cor escolhida (${opts[1]}): linha liberada`);
-const fixed = top().locator('.olist-row', { hasText: '16 Pro' });
-ok(await fixed.locator('[data-include]').isChecked(), 'e marcada para publicar');
+console.log('2. ajustar o preço de venda');
 const r2 = top().locator('.olist-row').nth(1);
 await r2.locator('[data-sale]').fill('');
 await r2.locator('[data-sale]').pressSequentially('499900');
@@ -87,8 +82,9 @@ ok(await top().locator('.olist-row').nth(1).locator('[data-sale]').inputValue() 
 await tap(top().locator('[data-publish]'));
 await page.waitForTimeout(400);
 // confirmação de "substituir" não aparece (replace desligado)
-let r = await waitDb(`select count(*)::int n from public.product_variants where on_order and order_supplier = 'Fornecedor SP'`, (x) => x[0].n === 4, 6000, page);
-ok(r[0].n === 4, `4 ofertas de encomenda gravadas (${r[0].n})`);
+const TOTAL = 3 + P16P.colors.length;
+let r = await waitDb(`select count(*)::int n from public.product_variants where on_order and order_supplier = 'Fornecedor SP'`, (x) => x[0].n === TOTAL, 6000, page);
+ok(r[0].n === TOTAL, `${TOTAL} ofertas gravadas: 3 + o 16 Pro em ${P16P.colors.length} cores (${r[0].n})`);
 r = await q(`select v.storage, v.color, v.condition, v.order_price::float p, v.order_cost::float c, v.order_lead, v.price::float price, v.stock
              from public.product_variants v join public.products p on p.id = v.product_id where p.slug = 'iphone-15' and v.on_order order by v.storage`);
 ok(r[0]?.p === 4290 && r[0]?.c === 3900 && r[0]?.order_lead === '7 a 10 dias', 'iPhone 15 128 preto: venda 4.290, custo 3.900, prazo');
@@ -97,7 +93,7 @@ ok(r[1]?.p === 4999, 'preço editado à mão gravado (4.999)');
 const semi = await one(`select v.condition from public.product_variants v join public.products p on p.id = v.product_id where p.slug = 'iphone-14-pro' and v.on_order`);
 ok(semi?.condition === 'Seminovo', 'seção *SEMINOVOS* vira condição Seminovo');
 await page.waitForTimeout(300);
-ok(await page.locator('.offer-row').count() === 4, 'aba "Sob encomenda" lista as 4 ofertas');
+ok(await page.locator('.offer-row').count() === TOTAL, `aba "Sob encomenda" lista as ${TOTAL} ofertas`);
 await shot('03-ofertas');
 const a3 = await audit(page, 'ofertas', { mobile: touch }); if (a3.length) console.log('    ⚠', a3.join('\n    ⚠ '));
 
@@ -128,7 +124,10 @@ await c.page.waitForTimeout(300);
 const cards = await c.page.locator('.cat-card').count();
 ok(cards === 1, `só encomenda: 1 modelo (${cards})`);
 ok((await c.page.locator('.cat-card').first().innerText()).includes('7 a 10 dias'), 'cartão com selo "Sob encomenda · prazo"');
-await (touch ? c.page.locator('[data-avail="todos"]').tap() : c.page.locator('[data-avail="todos"]').click());
+// tocar de novo no filtro ligado volta a mostrar tudo
+await (touch ? c.page.locator('[data-avail="encomenda"]').tap() : c.page.locator('[data-avail="encomenda"]').click());
+ok((await c.page.locator('[data-count]').innerText()).startsWith('Exibindo'), `contador "Exibindo N produtos" (${await c.page.locator('[data-count]').innerText()})`);
+const ca = await audit(c.page, 'catalogo-novo', { mobile: touch }); if (ca.length) console.log('    ⚠', ca.join(' | '));
 await c.page.waitForTimeout(200);
 await c.page.screenshot({ path: `${SHOTS}enc-${tag}-04-catalogo.png` });
 await (touch ? c.page.locator('.cat-card', { hasText: 'iPhone 15' }).first().tap() : c.page.locator('.cat-card', { hasText: 'iPhone 15' }).first().click());
@@ -154,7 +153,7 @@ await c.page.waitForTimeout(150);
 await (touch ? c.page.locator('.cat-sheet[open] [data-mode="pronta"]').tap() : c.page.locator('.cat-sheet[open] [data-mode="pronta"]').click());
 await (touch ? c.page.locator('.cat-sheet[open] [data-add]').tap() : c.page.locator('.cat-sheet[open] [data-add]').click());
 await c.page.waitForTimeout(500);
-await (touch ? c.page.locator('[data-open-bag]').first().tap() : c.page.locator('[data-open-bag]').first().click());
+await (touch ? c.page.locator('.cat-fab-bag').first().tap() : c.page.locator('.cat-fab-bag').first().click());
 await c.page.waitForSelector('.cat-bag[open] .cat-bag-item');
 ok(await c.page.locator('.cat-bag[open] .cat-bag-item').count() === 2, 'sacola com a mesma versão em 2 linhas (pronta e encomenda)');
 ok((await c.page.locator('.cat-bag[open] .cat-bag-total').innerText()).includes('8.770'), 'total 4.590 + 4.180 = 8.770');

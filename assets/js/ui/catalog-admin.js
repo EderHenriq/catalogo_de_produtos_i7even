@@ -346,7 +346,17 @@ export function mount(host, ctx) {
         <div class="card-body col gap-4">
           <label class="check"><input type="checkbox" name="catalogShowOutOfStock" ${s.catalogShowOutOfStock ? 'checked' : ''}><span class="box"></span>
             <span>Mostrar o que está sem estoque <span class="xs dim block">Aparece com o selo "Sob encomenda" - o cliente ainda pode pedir. Desmarcado: só o que tem na loja.</span></span></label>
-          <div class="field"><label class="label" for="cr-msg">Recado no topo do catálogo</label>
+          <div class="form-grid">
+            <div class="field span-6 span-half-mobile"><label class="label" for="cr-inst">Parcelamento no cartão</label>
+              <select class="select" id="cr-inst" name="catalogInstallments">
+                <option value="0" ${!s.catalogInstallments ? 'selected' : ''}>Não mostrar</option>
+                ${Array.from({ length: 23 }, (_, i) => i + 2).map((n) => `<option value="${n}" ${s.catalogInstallments === n ? 'selected' : ''}>Até ${n}x</option>`).join('')}
+              </select></div>
+            <div class="field span-6 span-half-mobile"><label class="label" for="cr-fee">Acréscimo no parcelado (%)</label>
+              <input class="input" id="cr-fee" name="catalogCardFee" inputmode="decimal" value="${esc(String(s.catalogCardFee || 0).replace('.', ','))}"></div>
+            <p class="span-12 xs dim" style="margin:0" data-inst-preview>${instPreview(s.catalogInstallments, s.catalogCardFee)}</p>
+          </div>
+          <div class="field"><label class="label" for="cr-msg">Recado no catálogo <span class="dim">(opcional - aparece acima dos produtos)</span></label>
             <textarea class="textarea" id="cr-msg" name="catalogMessage" maxlength="300" rows="3" placeholder="ex.: Entregamos em Maringá no mesmo dia · parcelamos em até 12x">${esc(s.catalogMessage)}</textarea></div>
           <p class="xs dim">O preço que vale é sempre o do sistema: se mudar aqui, o catálogo e o pedido do cliente mudam juntos.
             Custo, estoque exato e IMEI nunca aparecem para o cliente.</p>
@@ -416,6 +426,11 @@ export function mount(host, ctx) {
 
   root.addEventListener('change', async (e) => {
     if (e.target.matches('[data-toggle-open]')) { await setOpen(e.target.checked); return; }
+    if (e.target.matches('[name="catalogInstallments"]')) {
+      const f = e.target.form;
+      f.querySelector('[data-inst-preview]').innerHTML = instPreview(Number(e.target.value), Number(String(f.querySelector('[name="catalogCardFee"]').value).replace(',', '.')) || 0);
+      return;
+    }
     const opr = e.target.closest('[data-offer-price]');
     if (opr) {
       const v = Data.variant(opr.dataset.offerPrice);
@@ -431,6 +446,11 @@ export function mount(host, ctx) {
   });
 
   root.addEventListener('input', (e) => {
+    if (e.target.matches('[name="catalogCardFee"]')) {
+      const f = e.target.form;
+      f.querySelector('[data-inst-preview]').innerHTML = instPreview(Number(f.querySelector('[name="catalogInstallments"]').value), Number(String(e.target.value).replace(',', '.')) || 0);
+      return;
+    }
     if (e.target.matches('[data-q]')) {
       q = e.target.value;
       const pos = e.target.selectionStart;
@@ -450,11 +470,19 @@ export function mount(host, ctx) {
         await Data.saveSettings({
           catalogShowOutOfStock: f.querySelector('[name="catalogShowOutOfStock"]').checked,
           catalogMessage: f.querySelector('[name="catalogMessage"]').value,
+          catalogInstallments: Number(f.querySelector('[name="catalogInstallments"]').value) || 0,
+          catalogCardFee: Math.min(Math.max(Number(String(f.querySelector('[name="catalogCardFee"]').value).replace(',', '.')) || 0, 0), 100),
         });
         toast('Regras salvas');
       } catch (err) { toastError('Não foi possível salvar', friendlyError(err)); }
     });
   });
+
+  /** Exemplo do que o cliente vê: "R$ 5.000,00 → ou 12x de R$ 487,50". */
+  function instPreview(n, fee) {
+    if (!(n >= 2)) return 'O catálogo mostra só o preço à vista.';
+    return `Exemplo no catálogo: R$ 5.000,00 · ou ${n}x de ${esc(money((5000 * (1 + (Number(fee) || 0) / 100)) / n))}${fee ? '' : ' (sem acréscimo)'}`;
+  }
 
   async function setOpen(open) {
     if (open && !waNumber(Data.settings().phone)) {

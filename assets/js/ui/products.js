@@ -341,6 +341,8 @@ export function openProductSheet(productId) {
         </div>
       </div>
 
+      ${colorPhotosHTML(active)}
+
       <div class="fieldset">
         <div class="fieldset-title">Variações (${active.length})
           ${active.length ? `<button type="button" class="btn btn-ghost btn-sm" data-toggle-prices>${icon(editingPrices ? 'x' : 'tag')} ${editingPrices ? 'Cancelar' : 'Editar preços'}</button>` : ''}
@@ -359,6 +361,25 @@ export function openProductSheet(productId) {
           </div>`}
         ${inactive.length ? `<details class="inactive-variants"><summary class="small dim">${inactive.length} ${inactive.length === 1 ? 'variação inativa' : 'variações inativas'}</summary>
           <div class="variant-list">${inactive.map((v) => variantRowHTML(p, v)).join('')}</div></details>` : ''}
+      </div>`;
+  }
+
+  /** Uma foto por cor (fundo branco, como vitrine): vale para todas as variações da cor, até as de encomenda. */
+  function colorPhotosHTML(active) {
+    const colors = [...new Set(active.map((v) => v.color).filter(Boolean))]
+      .sort((a, b) => (p.colors.indexOf(a) + 1 || 999) - (p.colors.indexOf(b) + 1 || 999));
+    if (!colors.length) return '';
+    return `
+      <div class="fieldset">
+        <div class="fieldset-title">Fotos por cor <span class="dim small" style="font-weight:400;text-transform:none;letter-spacing:0">o cliente vê a foto da cor que escolher</span></div>
+        <div class="color-photos">
+          ${colors.map((c) => {
+            const withImg = active.find((v) => v.color === c && v.imageUrl);
+            return `<button type="button" class="color-photo" data-color-photo="${esc(c)}" aria-label="Foto da cor ${esc(c)}">
+              <span class="color-photo-img">${withImg ? productThumb(p, 'md', withImg) : icon('camera')}</span>
+              <span class="color-photo-name">${esc(c)}</span></button>`;
+          }).join('')}
+        </div>
       </div>`;
   }
 
@@ -399,6 +420,26 @@ export function openProductSheet(productId) {
     if (hero) {
       if (!p.imageUrl) { photoMenu(hero, p, render); return; }
       openPhotoViewer(p, render);
+      return;
+    }
+    const cp = t.closest('[data-color-photo]');
+    if (cp) {
+      const color = cp.dataset.colorPhoto;
+      const input = document.createElement('input');
+      input.type = 'file';
+      input.accept = 'image/*';
+      input.addEventListener('change', async () => {
+        const f = input.files?.[0];
+        if (!f) return;
+        cp.classList.add('is-busy');
+        try {
+          const url = await Data.uploadProductImage(f, { square: true });
+          const n = await Data.setColorPhoto(p.id, color, url);
+          toast(`Foto da cor ${color}`, { text: `Vale para ${n} ${n === 1 ? 'variação' : 'variações'} (pronta entrega e encomenda).` });
+          render();
+        } catch (err) { toastError('Não consegui salvar a foto', friendlyError(err)); cp.classList.remove('is-busy'); }
+      });
+      input.click();
       return;
     }
     const v = t.closest('[data-variant]');
@@ -1049,7 +1090,7 @@ export function openVariantForm(v, { onSaved } = {}) {
           <input class="input" id="vf-min" name="minStock" type="number" inputmode="numeric" min="0" max="9999" value="${esc(d.minStock)}"></div>
         <div class="field span-8"><label class="label" for="vf-barcode">Código de barras <span class="dim">(opcional)</span></label>
           <input class="input" id="vf-barcode" name="barcode" maxlength="40" inputmode="numeric" value="${esc(d.barcode)}"></div>
-        <div class="field span-5"><span class="label">Foto desta variação <span class="dim">(opcional - ex.: a cor)</span></span><div data-photo></div></div>
+        <div class="field span-5"><span class="label">Foto desta cor <span class="dim">(vale também para as outras variações desta cor sem foto)</span></span><div data-photo></div></div>
         <div class="field span-7 col gap-2" style="justify-content:flex-start">
           <label class="check"><input type="checkbox" name="showInCatalog" ${d.showInCatalog ? 'checked' : ''}><span class="box"></span><span>Aparece no catálogo</span></label>
           <label class="check"><input type="checkbox" name="active" ${d.active ? 'checked' : ''}><span class="box"></span><span>Ativa (desmarcada: some do pedido)</span></label>
@@ -1117,11 +1158,14 @@ export function openVariantForm(v, { onSaved } = {}) {
     await withLoading(btn, async () => {
       try {
         await Data.saveVariant(next);
+        // Foto nova: vale para as outras variações desta cor que estão sem foto.
+        const spread = next.imageUrl && next.imageUrl !== v.imageUrl
+          ? await Data.applyColorPhoto(v.productId, next.color, next.imageUrl).catch(() => 0) : 0;
         photo.discarded(true).forEach((u) => Data.deleteProductImage(u));
         if (photo.replaced()) Data.deleteProductImage(photo.replaced(), { except: v.id });
         photo.dispose();
         modal.close();
-        toast('Variação atualizada');
+        toast('Variação atualizada', spread ? { text: `A foto também foi para ${spread} ${spread === 1 ? 'variação' : 'variações'} na cor ${next.color}.` } : {});
         onSaved?.();
       } catch (err) {
         modal.body.querySelector('[data-erro-txt]').textContent = friendlyError(err);

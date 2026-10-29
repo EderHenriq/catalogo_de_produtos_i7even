@@ -108,6 +108,8 @@ function settingsFromRow(r = {}) {
     catalogEnabled: !!r.catalog_enabled,
     catalogShowOutOfStock: r.catalog_show_out_of_stock !== false,
     catalogMessage: r.catalog_message || '',
+    catalogInstallments: Number(r.catalog_installments) || 0,
+    catalogCardFee: r.catalog_card_fee == null ? 0 : num(r.catalog_card_fee),
     updatedAt: r.updated_at,
   };
 }
@@ -117,6 +119,7 @@ const SETTINGS_COLS = {
   pixKey: 'pix_key', footerText: 'footer_text', defaultMarkupPct: 'default_markup_pct',
   allowNegativeStock: 'allow_negative_stock', warrantyDays: 'warranty_days', catalogEnabled: 'catalog_enabled',
   catalogShowOutOfStock: 'catalog_show_out_of_stock', catalogMessage: 'catalog_message',
+  catalogInstallments: 'catalog_installments', catalogCardFee: 'catalog_card_fee',
 };
 
 const categoryFromRow = (r) => ({
@@ -873,6 +876,32 @@ export async function clearOrderOffers(ids) {
     .update({ on_order: false, order_updated_at: new Date().toISOString() }).in('id', ids);
   if (error) throw error;
   await reload('products');
+}
+
+/**
+ * Foto por cor: a foto escolhida numa variação vale para as outras da
+ * mesma cor do modelo que ainda estão sem foto (128GB, 256GB, seminovo,
+ * sob encomenda...). Devolve quantas ganharam a foto.
+ */
+export async function applyColorPhoto(productId, color, url) {
+  const ids = state.variants.filter((v) => v.productId === productId && v.color === color && !v.imageUrl).map((v) => v.id);
+  if (!url || !color || !ids.length) return 0;
+  mute('products');
+  const { error } = await getClient().from('product_variants').update({ image_url: url }).in('id', ids);
+  if (error) throw error;
+  await reload('products');
+  return ids.length;
+}
+
+/** Troca a foto de TODAS as variações de uma cor do modelo ("Fotos por cor" na ficha). */
+export async function setColorPhoto(productId, color, url) {
+  const ids = state.variants.filter((v) => v.productId === productId && v.color === color).map((v) => v.id);
+  if (!ids.length) return 0;
+  mute('products');
+  const { error } = await getClient().from('product_variants').update({ image_url: url || null }).in('id', ids);
+  if (error) throw error;
+  await reload('products');
+  return ids.length;
 }
 
 /** Ajusta o valor de venda de uma oferta de encomenda (sem mexer no resto). */

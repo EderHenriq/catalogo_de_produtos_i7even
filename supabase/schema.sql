@@ -159,6 +159,14 @@ alter table public.store_settings drop constraint if exists store_settings_warra
 alter table public.store_settings add constraint store_settings_warranty_check
   check (jsonb_typeof(warranty_days) = 'object' and pg_column_size(warranty_days) <= 2000);
 
+-- Parcelamento no cartão mostrado no catálogo ("ou 12x de R$ ..."). 0 = não mostra.
+-- catalog_card_fee: acréscimo TOTAL em % no parcelado (taxa da maquininha repassada).
+alter table public.store_settings add column if not exists catalog_installments smallint not null default 0;
+alter table public.store_settings add column if not exists catalog_card_fee numeric(6,2) not null default 0;
+alter table public.store_settings drop constraint if exists store_settings_installments_check;
+alter table public.store_settings add constraint store_settings_installments_check
+  check (catalog_installments between 0 and 24 and catalog_card_fee between 0 and 100);
+
 insert into public.store_settings (id) values (1) on conflict (id) do nothing;
 
 drop trigger if exists store_settings_touch_trg on public.store_settings;
@@ -2299,7 +2307,8 @@ begin
     'generated_at', now(),
     'store', jsonb_build_object(
       'name', s.store_name, 'phone', s.phone, 'instagram', s.instagram,
-      'address', s.address, 'message', s.catalog_message),
+      'address', s.address, 'message', s.catalog_message,
+      'installments', s.catalog_installments, 'card_fee', s.catalog_card_fee),
     'categories', (
       select coalesce(jsonb_agg(jsonb_build_object('id', c.id, 'name', c.name, 'emoji', c.emoji, 'image', c.image,
                                                    'description', c.description, 'variant_label', c.variant_label,

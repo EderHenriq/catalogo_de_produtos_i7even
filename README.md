@@ -8,6 +8,45 @@ e login. Publica no Netlify em segundos e abre em qualquer aparelho com internet
 
 ---
 
+## Versão 2: como subir (leia primeiro)
+
+A v2 traz: cadastro de modelos com variações e **IMEI**, entradas de mercadoria,
+**catálogo online** no estilo vitrine (pronta entrega × sob encomenda, cor por
+foto, parcelamento), **lista do fornecedor colada do WhatsApp**, **fiado com
+parcelas** (tela *A receber*, cobrança no WhatsApp, avisos de vencimento),
+pedido em PDF e **backup diário no GitHub** que também impede o Supabase grátis
+de pausar.
+
+**Ordem para subir (uma vez):**
+
+1. **Backup antes de tudo** - no sistema atual, *Ajustes → Backup* (baixa o JSON).
+2. **Supabase → SQL Editor**: rode `supabase/schema.sql` inteiro e depois
+   `supabase/seed_catalogo.sql`. Os dois podem rodar de novo sem duplicar nada.
+   Os pedidos da v1 são migrados com os mesmos totais (testado).
+3. **Confira a segurança** (no computador, com Node instalado):
+   `cd tests && npm install && npm run test:security` - tudo tem de sair "recusado".
+4. **Publique** a branch no Netlify (o `netlify.toml` já tem os cabeçalhos de
+   segurança e esconde `/supabase`, `/tests` e `/.github`).
+5. **Ligue o backup no GitHub** (opcional, recomendado):
+   *GitHub → repositório → Settings → Secrets and variables → Actions → New repository secret*
+   - `SUPABASE_DB_URL` - Supabase → **Connect** → *Session pooler* (a connection string com a senha do banco);
+   - `BACKUP_PASSPHRASE` - uma senha longa só sua (guarde num cofre de senhas: sem ela o backup não abre).
+
+   Depois: *Actions → "Supabase acordado + backup" → Run workflow*. Ele roda
+   sozinho todo dia às 06:23. Sem os secrets, ele só faz o "sinal de vida"
+   (que já impede a pausa) e pula o backup.
+
+**Restaurar um backup:** baixe o artefato em *Actions*, abra com
+`gpg -d i7even-AAAA-MM-DD_HHMM.tar.gz.gpg > b.tar.gz` (pede a passphrase),
+`tar -xzf b.tar.gz`, e no SQL Editor rode: `schema.sql` → `2_login.sql` → `1_dados.sql`.
+**Cuidado:** o `1_dados.sql` apaga os dados atuais e põe os do backup no lugar.
+
+**Testes (no computador):** `cd tests && npm test` (fórmulas + banco + backup) e
+`npm run test:e2e` (telas no iPhone e no desktop; precisa do Chrome e de
+`python -m http.server 8765` na pasta do projeto).
+
+---
+
 ## Índice
 
 1. [Como colocar no ar (4 passos)](#como-colocar-no-ar)

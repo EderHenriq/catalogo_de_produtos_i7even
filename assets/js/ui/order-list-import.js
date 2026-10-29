@@ -24,6 +24,7 @@ import { icon } from './icons.js';
 import { pref, setPref, productThumb } from './common.js';
 
 const MONEY_ATTRS = 'inputmode="numeric" autocomplete="off" placeholder="0,00"';
+const ALL_COLORS = '*';   // todas as cores do modelo (uma oferta por cor)
 
 const EXAMPLE = `📱 IPHONE 15 PRO MAX
 256GB azul - R$ 6.200
@@ -146,7 +147,12 @@ export function openOrderListImport({ onDone } = {}) {
     // A mesma oferta repetida na lista: vale a última linha.
     const map = new Map();
     for (const r of res.rows) map.set([r.product.id, r.storage, r.color, r.size, r.condition].join('|').toLowerCase(), r);
-    rows = [...map.values()].map((r, i) => ({
+    rows = [...map.values()].map((r) => {
+      // Lista sem cor = o fornecedor tem nas cores do modelo: vira "todas as
+      // cores" (uma oferta por cor) e o cliente escolhe a cor no catálogo.
+      if (r.issues.includes('cor') && r.product.colors?.length) return { ...r, color: ALL_COLORS, issues: r.issues.filter((x) => x !== 'cor') };
+      return r;
+    }).map((r, i) => ({
       ...r, key: `r${i}`, include: !r.issues.length, manual: false,
       cost: listCost(r.price, priceOpts(r.currency)),
       sale: salePrice(r.price, priceOpts(r.currency)),
@@ -159,13 +165,14 @@ export function openOrderListImport({ onDone } = {}) {
   /* ------------------------------------------------------------ passo 2 -- */
 
   function existing(r) {
+    if (r.color === ALL_COLORS) return null;
     return Data.findVariant(r.product.id, { storage: r.storage, color: r.color, size: r.size, condition: r.condition });
   }
 
   function renderReview() {
     step = 2;
     const usd = rows.some((r) => r.currency === 'USD');
-    const fresh = rows.filter((r) => !existing(r)).length;
+    const fresh = rows.filter((r) => r.color !== ALL_COLORS && !existing(r)).length;
     const doubt = rows.filter((r) => r.issues.length).length;
     $step.innerHTML = `
       <div class="olist-summary">
@@ -196,7 +203,7 @@ export function openOrderListImport({ onDone } = {}) {
     const cat = Data.category(p.categoryId);
     const ex = existing(r);
     const storages = [...new Set([...(p.storages || []), r.storage].filter(Boolean))];
-    const colors = [...new Set([...(p.colors || []), r.color].filter(Boolean))];
+    const colors = [...new Set([...(p.colors || []), r.color].filter((c) => c && c !== ALL_COLORS))];
     const missingS = p.storages?.length > 1 && !r.storage;
     const missingC = p.colors?.length > 0 && !r.color;
     return `
@@ -204,12 +211,12 @@ export function openOrderListImport({ onDone } = {}) {
         <label class="olist-check"><input type="checkbox" data-include ${r.include ? 'checked' : ''} aria-label="Publicar esta linha"></label>
         ${productThumb(p, 'sm')}
         <div class="olist-main">
-          <div class="strong small">${esc(p.name)} ${ex ? '' : '<span class="tag tone-amber">nova variação</span>'}</div>
+          <div class="strong small">${esc(p.name)} ${r.color === ALL_COLORS ? `<span class="tag tone-indigo">${p.colors.length} cores · cliente escolhe</span>` : ex ? '' : '<span class="tag tone-amber">nova variação</span>'}</div>
           <div class="olist-selects">
             ${storages.length ? `<select class="select sm${missingS ? ' is-missing' : ''}" data-f="storage" aria-label="${esc(cat?.variantLabel || 'Capacidade')}">
               <option value="">${esc(cat?.variantLabel || 'Capacidade')}?</option>${storages.map((s) => `<option ${s === r.storage ? 'selected' : ''}>${esc(s)}</option>`).join('')}</select>` : ''}
             ${colors.length ? `<select class="select sm${missingC ? ' is-missing' : ''}" data-f="color" aria-label="Cor">
-              <option value="">Cor?</option>${colors.map((c) => `<option ${c === r.color ? 'selected' : ''}>${esc(c)}</option>`).join('')}</select>` : ''}
+              <option value="">Cor?</option>${p.colors?.length > 1 ? `<option value="${ALL_COLORS}" ${r.color === ALL_COLORS ? 'selected' : ''}>Todas as cores (${p.colors.length})</option>` : ''}${colors.map((c) => `<option ${c === r.color ? 'selected' : ''}>${esc(c)}</option>`).join('')}</select>` : ''}
             <select class="select sm" data-f="condition" aria-label="Condição">${[...new Set([...CONDITIONS, r.condition])].map((c) => `<option ${c === r.condition ? 'selected' : ''}>${esc(c)}</option>`).join('')}</select>
           </div>
           <div class="xs dim olist-line" title="${esc(r.line)}">“${esc(r.line)}”</div>
@@ -299,6 +306,19 @@ export function openOrderListImport({ onDone } = {}) {
     if (r && e.target.matches('[data-sale]')) { r.sale = parseMoney(e.target.value); r.manual = true; }
   });
 
+  /**
+   * Todas as cores vira uma oferta por cor do modelo. Linha com cor
+   * específica vence a de todas as cores na mesma versão (vem depois).
+   */
+  function expand(list) {
+    const out = new Map();
+    const put = (r, color) => out.set([r.product.id, r.storage, color, r.size, r.condition].join('|').toLowerCase(),
+      { productId: r.product.id, storage: r.storage, color, size: r.size, condition: r.condition, cost: r.cost, price: r.sale });
+    for (const r of list.filter((x) => x.color === ALL_COLORS)) for (const c of r.product.colors || []) put(r, c);
+    for (const r of list.filter((x) => x.color !== ALL_COLORS)) put(r, r.color);
+    return [...out.values()];
+  }
+
   async function publish(btn) {
     const list = rows.filter((r) => r.include);
     const bad = list.find((r) => !(r.sale > 0));
@@ -319,7 +339,7 @@ export function openOrderListImport({ onDone } = {}) {
       try {
         const res = await Data.importOrderList({
           supplier: opts.supplier, lead: opts.lead, replace: opts.replace,
-          items: list.map((r) => ({ productId: r.product.id, storage: r.storage, color: r.color, size: r.size, condition: r.condition, cost: r.cost, price: r.sale })),
+          items: expand(list),
         });
         text = '';
         modal.close();
