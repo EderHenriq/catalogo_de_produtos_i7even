@@ -724,7 +724,7 @@ dialog.cat-sheet[open] { display: flex; align-items: flex-end; justify-content: 
 .cat-bag-thumb { background: var(--cat-photo-bg); }
 
 /* ===================================================== identidade i7 */
-/* Cartão da marca: grafite com o "i7" de marca d'água - o topo da vitrine é
+/* Cartão da marca em grafite - o topo da vitrine é
    da i7even, não um perfil genérico. Abas grandes separam pronta entrega
    e encomenda (antes ficavam misturadas com os filtros). */
 
@@ -735,11 +735,6 @@ dialog.cat-sheet[open] { display: flex; align-items: flex-end; justify-content: 
   background: radial-gradient(120% 140% at 0% 0%, #2a2c31 0%, #141518 55%, #0b0c0e 100%);
   color: #fff;
   box-shadow: 0 20px 40px -18px rgba(0, 0, 0, .45);
-}
-.cat-brand-card::after {
-  content: ''; position: absolute; z-index: -1; right: -40px; bottom: -70px; width: 260px; height: 260px;
-  background: url('../brand/i7even-avatar-i7.svg') center / contain no-repeat;
-  opacity: .07; transform: rotate(-12deg);
 }
 .cat-brand-top { display: flex; align-items: center; gap: 14px; }
 .cat-brand .cat-avatar { width: 68px; height: 68px; box-shadow: 0 0 0 1px rgba(255, 255, 255, .14), 0 10px 24px rgba(0, 0, 0, .4); }
