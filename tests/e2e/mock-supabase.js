@@ -132,6 +132,8 @@ async function rpc(fn, args = {}) {
 }
 
 const listeners = [];
+// teste: simula um evento de login/logout do Supabase (ex.: sessão encerrada)
+window.__emitAuth = (event) => listeners.forEach((cb) => cb(event, event === 'SIGNED_OUT' ? null : session));
 const session = { user: { email: window.__TEST_EMAIL || 'eder.pontes2014@gmail.com', last_sign_in_at: new Date().toISOString() } };
 
 const client = {

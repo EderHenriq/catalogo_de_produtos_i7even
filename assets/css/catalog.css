@@ -366,13 +366,16 @@ html.cat-locked { overflow: hidden; }
 .cat-fab-wa .icon { width: 28px; height: 28px; }
 @keyframes cat-wa-in { from { opacity: 0; transform: scale(.4); } }
 
-/* Botão flutuante da sacola (celular, perto do polegar). */
+/* Botão flutuante da sacola (celular, perto do polegar). Centralizado com
+   margem automática - não com transform -, assim nenhuma animação tira a
+   barra do lugar. */
 .cat-fab-bag {
   position: fixed;
-  left: 50%;
+  left: 0; right: 0;
+  margin-inline: auto;
+  width: max-content; max-width: calc(100vw - 32px);
   bottom: calc(16px + env(safe-area-inset-bottom));
   z-index: 25;
-  transform: translateX(-50%);
   display: inline-flex; align-items: center; gap: 10px;
   height: 54px;
   padding: 0 10px 0 20px;
@@ -383,13 +386,13 @@ html.cat-locked { overflow: hidden; }
   font: 600 15px var(--font);
   box-shadow: 0 14px 34px rgba(0, 0, 0, .3);
   cursor: pointer;
-  animation: cat-fab-in .5s var(--cat-spring) both;
+  animation: cat-fab-in .5s var(--cat-spring) backwards;
   transition: transform .2s var(--cat-spring);
 }
-.cat-fab-bag:active { transform: translateX(-50%) scale(.95); }
+.cat-fab-bag:active { transform: scale(.96); }
 .cat-fab-bag .icon { width: 20px; height: 20px; }
 .cat-fab-total { padding: 8px 12px; border-radius: 999px; background: rgba(255, 255, 255, .14); font: 600 14px var(--font-num); }
-@keyframes cat-fab-in { from { opacity: 0; transform: translate(-50%, 30px) scale(.9); } to { opacity: 1; transform: translateX(-50%); } }
+@keyframes cat-fab-in { from { opacity: 0; transform: translateY(30px) scale(.92); } to { opacity: 1; transform: none; } }
 
 /* ----------------------------------------------- folha (modelo/sacola) -- */
 
@@ -489,7 +492,7 @@ dialog.cat-sheet[open] { display: flex; align-items: flex-end; justify-content: 
 }
 .cat-carousel::-webkit-scrollbar { display: none; }
 .cat-slide { flex: 0 0 100%; scroll-snap-align: center; aspect-ratio: 1; position: relative; overflow: hidden; }
-.cat-slide img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; padding: 7%; animation: cat-fade .4s var(--cat-ease); }
+.cat-slide img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; padding: 7%; }
 .cat-slide.empty { display: grid; place-items: center; color: #c7c7cc; }
 .cat-slide.empty .icon { width: 35%; height: 35%; stroke-width: 1; }
 .cat-dots-nav { position: absolute; bottom: 12px; left: 0; right: 0; display: flex; justify-content: center; gap: 6px; }
@@ -512,8 +515,7 @@ dialog.cat-sheet[open] { display: flex; align-items: flex-end; justify-content: 
 @media (min-width: 860px) { .cat-sheet-info { padding: 34px 32px 30px; overflow-y: auto; } }
 .cat-sheet-info h2 { margin: -6px 0 0; font-size: clamp(24px, 4vw, 32px); font-weight: 650; letter-spacing: -.03em; line-height: 1.1; }
 .cat-price-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
-.cat-price { font: 700 28px/1 var(--font); letter-spacing: -.03em; animation: cat-price .35s var(--cat-ease); }
-@keyframes cat-price { from { opacity: .3; transform: translateY(4px); } }
+.cat-price { font: 700 28px/1 var(--font); letter-spacing: -.03em; }
 .cat-avail { display: inline-flex; align-items: center; gap: 6px; padding: 5px 11px; border-radius: 999px; font-size: 12.5px; font-weight: 600; }
 .cat-avail::before { content: ''; width: 7px; height: 7px; border-radius: 50%; background: currentColor; }
 .cat-avail.ok { background: var(--tone-green-bg); color: var(--tone-green-fg); }
@@ -605,7 +607,6 @@ dialog.cat-sheet[open] { display: flex; align-items: flex-end; justify-content: 
   padding: 10px;
   border-radius: 16px;
   background: var(--surface-2);
-  animation: cat-rise .35s var(--cat-ease) both;
 }
 .cat-bag-thumb { width: 58px; height: 58px; flex: none; border-radius: 12px; background: #fff; display: grid; place-items: center; overflow: hidden; color: #c7c7cc; }
 .cat-bag-thumb img { width: 100%; height: 100%; object-fit: contain; padding: 4px; }
@@ -721,10 +722,11 @@ dialog.cat-sheet[open] { display: flex; align-items: flex-end; justify-content: 
 
 /* Celular: a barra da sacola ocupa a largura e deixa o WhatsApp à direita. */
 @media (max-width: 520px) {
-  .cat-fab-bag { left: 16px; right: 88px; transform: none; justify-content: space-between; animation-name: cat-fab-in-m; }
-  .cat-fab-bag:active { transform: scale(.97); }
+  .cat-fab-bag {
+    left: calc(16px + env(safe-area-inset-left)); right: calc(88px + env(safe-area-inset-right));
+    width: auto; max-width: none; margin: 0; justify-content: space-between;
+  }
 }
-@keyframes cat-fab-in-m { from { opacity: 0; transform: translateY(30px) scale(.94); } to { opacity: 1; transform: none; } }
 
 /* Parcelamento na ficha do modelo */
 .cat-inst-line { margin: -6px 0 0; font-size: 13.5px; color: var(--text-2); }
@@ -931,8 +933,6 @@ body.catalog { background: var(--cat-page); isolation: isolate; }
 /* produto voando para a sacola */
 .cat-fly { position: fixed; z-index: 70; object-fit: contain; background: var(--cat-photo-bg); box-shadow: 0 18px 40px rgba(0, 0, 0, .25); pointer-events: none; mix-blend-mode: normal; }
 
-/* sacola: pulinho quando entra item */
-.cat-fab-bag:not([hidden]) { animation: cat-fab-in .5s var(--cat-spring) both; }
 
 /* tema: ferramentas do topo */
 .cat-brand-tools { display: flex; gap: 8px; align-self: flex-start; }
@@ -998,7 +998,6 @@ body.catalog { background: var(--cat-page); isolation: isolate; }
    multiply precisa do fundo no próprio quadro (isolado), senão mistura com
    o transparente e o retângulo branco aparece (ficha no celular). */
 .cat-photo, .cat-slide { background: var(--cat-photo-bg); isolation: isolate; }
-.cat-slide img { animation: none; }
 
 /* Categoria ainda vazia: aviso "em breve" com atalho para o WhatsApp */
 .cat-soon { display: flex; flex-direction: column; align-items: center; gap: 2px; max-width: 420px; margin: 0 auto; }

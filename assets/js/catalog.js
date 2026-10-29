@@ -384,12 +384,6 @@ function toggleTheme() {
   if (document.startViewTransition && !reduceMotion.matches) document.startViewTransition(apply); else apply();
 }
 
-/** Re-desenha a grade com uma transição suave entre os filtros. */
-function softRender(fn) {
-  if (document.startViewTransition && !reduceMotion.matches) document.startViewTransition(fn);
-  else fn();
-}
-
 /** O produto "voa" até a sacola (a foto encolhe até o botão). */
 function flyToBag(img) {
   const target = [...ROOT.querySelectorAll('.cat-fab-bag:not([hidden]), .cat-mini.is-on [data-open-bag]')].find((x) => x.offsetParent) || ROOT.querySelector('.cat-fab-bag');
@@ -517,7 +511,12 @@ function cardHTML(p) {
 const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
 let revealObserver = null;
 
-/** Marca os cartões novos e revela em cascata conforme entram na tela. */
+/**
+ * Revela os cartões em cascata conforme entram na tela - só na primeira vez
+ * que a grade aparece. Trocar filtro, categoria ou busca mostra a grade na
+ * hora, sem efeito.
+ */
+let revealed = false;
 function reveal(grid) {
   if (reduceMotion.matches || !('IntersectionObserver' in window)) return;
   revealObserver?.disconnect();
@@ -530,13 +529,19 @@ function reveal(grid) {
       revealObserver.unobserve(e.target);
     }
   }, { rootMargin: '0px 0px -6% 0px', threshold: 0.08 });
-  grid.querySelectorAll('.cat-card').forEach((c) => { c.classList.add('reveal'); revealObserver.observe(c); });
+  // os que já estão na tela ficam como estão (sem piscar, foto na hora); os de baixo aparecem ao rolar
+  const fold = innerHeight;
+  grid.querySelectorAll('.cat-card').forEach((c) => {
+    if (c.getBoundingClientRect().top < fold) return;
+    c.classList.add('reveal');
+    revealObserver.observe(c);
+  });
 }
 
 function renderGrid() {
   const grid = ROOT.querySelector('[data-grid]');
   if (!grid) return;
-  requestAnimationFrame(() => reveal(grid));
+  if (!revealed) { revealed = true; requestAnimationFrame(() => reveal(grid)); } else revealObserver?.disconnect();
   const list = filtered();
   ROOT.querySelector('[data-count]').textContent = `Exibindo ${list.length} ${list.length === 1 ? 'produto' : 'produtos'}`;
   const cat0 = (st.data.categories || []).find((c) => c.id === st.cat);
@@ -1010,7 +1015,7 @@ ROOT.addEventListener('click', (e) => {
     st.cat = st.cat === c.dataset.cat ? '' : c.dataset.cat;
     history.replaceState(null, '', st.cat ? `#c=${encodeURIComponent(st.cat)}` : location.pathname);
     renderCats();
-    softRender(renderGrid);
+    renderGrid();
     return;
   }
   if (t.closest('[data-theme-toggle]')) { toggleTheme(); return; }
@@ -1019,7 +1024,7 @@ ROOT.addEventListener('click', (e) => {
     st.cond = cond.dataset.cond;
     savePrefs();
     ROOT.querySelectorAll('[data-cond]').forEach((b) => b.setAttribute('aria-pressed', String(b === cond)));
-    softRender(renderGrid);
+    renderGrid();
     return;
   }
   const av = t.closest('[data-avail]');
@@ -1028,7 +1033,7 @@ ROOT.addEventListener('click', (e) => {
     st.avail = av.dataset.avail;
     savePrefs();
     ROOT.querySelectorAll('[data-avail]').forEach((b) => b.setAttribute('aria-selected', String(b.dataset.avail === st.avail)));
-    softRender(renderGrid);
+    renderGrid();
     updateBagButton();
     return;
   }
@@ -1037,7 +1042,7 @@ ROOT.addEventListener('click', (e) => {
     st.view = vw.dataset.view;
     savePrefs();
     ROOT.querySelectorAll('[data-view]').forEach((b) => b.setAttribute('aria-pressed', String(b === vw)));
-    softRender(renderGrid);
+    renderGrid();
     return;
   }
   if (t.closest('[data-go-search]')) {

@@ -253,6 +253,12 @@ function navHTML() {
 }
 
 function renderApp() {
+  // Moldura nova (login de novo, sessão retomada): a tela da sessão anterior
+  // é desmontada e a rota volta do zero - senão route() achava que "já está
+  // no Estoque" e deixava a área do meio vazia (a tela preta depois do login).
+  try { current?.destroy?.(); } catch (err) { capture(err, { where: 'destroy' }); }
+  current = null;
+  currentId = null;
   ROOT.innerHTML = `
     <div class="app" data-drawer="closed">
       <aside class="sidebar" aria-label="Menu principal">
@@ -558,8 +564,10 @@ function startAutoSync() {
 
 /* ------------------------------------------- desconexão por inatividade */
 
+let idleWired = false;
 function startIdleWatch() {
-  if (!APP.idleLogoutMinutes) return;
+  if (!APP.idleLogoutMinutes || idleWired) return;
+  idleWired = true;   // um vigia só, por mais que se entre e saia sem recarregar
   const limit = APP.idleLogoutMinutes * 60 * 1000;
   let timer;
 
