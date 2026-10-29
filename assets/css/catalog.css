@@ -641,16 +641,32 @@ dialog.cat-sheet[open] { display: flex; align-items: flex-end; justify-content: 
 /* ------------------------------------------------- rodapé e avisos -- */
 
 .cat-foot {
-  display: flex; flex-direction: column; align-items: center; gap: 6px;
-  padding: 40px var(--cat-pad) calc(110px + env(safe-area-inset-bottom));
-  text-align: center;
-  color: var(--text-3);
-  font-size: 13px;
-  border-top: 1px solid var(--divider);
+  margin-top: 24px;
+  padding: 0 var(--cat-pad) calc(96px + env(safe-area-inset-bottom));
+  color: var(--text-3); font-size: 13px;
 }
-.cat-foot p { margin: 0; }
-.cat-foot b { color: var(--text); }
-.cat-foot .cat-btn { margin-top: 12px; }
+.cat-foot-inner {
+  max-width: var(--cat-max); margin: 0 auto; padding: 28px 24px 18px; border-radius: 26px;
+  background: radial-gradient(120% 140% at 0% 0%, #2a2c31 0%, #141518 55%, #0b0c0e 100%); color: rgba(255, 255, 255, .7);
+}
+.cat-foot-brand { display: flex; align-items: center; gap: 14px; }
+.cat-foot-brand .cat-avatar { width: 48px; height: 48px; box-shadow: 0 0 0 1px rgba(255, 255, 255, .14); }
+.cat-foot-brand b { display: block; font-size: 17px; letter-spacing: -.02em; color: #fff; }
+.cat-foot-brand p { margin: 3px 0 0; font-size: 13px; line-height: 1.45; }
+.cat-foot-trust { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; margin: 22px 0; }
+.cat-foot-trust span { display: flex; align-items: center; gap: 8px; padding: 12px; border-radius: 14px; background: rgba(255, 255, 255, .06); color: #fff; font-size: 12.5px; font-weight: 550; line-height: 1.3; }
+.cat-foot-trust .icon { width: 18px; height: 18px; flex: none; color: #7ee2a0; }
+.cat-foot-cols { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 18px; padding: 4px 0 18px; }
+.cat-foot-cols h4 { margin: 0 0 8px; font-size: 11px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: rgba(255, 255, 255, .45); }
+.cat-foot-cols a, .cat-foot-cols span { display: flex; align-items: center; gap: 7px; margin: 0 0 6px; color: rgba(255, 255, 255, .82); text-decoration: none; line-height: 1.45; }
+.cat-foot-cols a:hover { color: #fff; }
+.cat-foot-cols .icon { width: 16px; height: 16px; flex: none; }
+.cat-foot-bottom { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 6px 16px; padding-top: 14px; border-top: 1px solid rgba(255, 255, 255, .1); font-size: 12px; color: rgba(255, 255, 255, .45); }
+@media (max-width: 760px) {
+  .cat-foot-trust { grid-template-columns: 1fr 1fr; }
+  .cat-foot-cols { grid-template-columns: 1fr; gap: 12px; }
+  .cat-foot-inner { padding: 22px 18px 16px; border-radius: 22px; }
+}
 
 .cat-flash {
   position: fixed;

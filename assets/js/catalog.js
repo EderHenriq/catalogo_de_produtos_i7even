@@ -277,7 +277,7 @@ function renderShell() {
         <button type="button" role="tab" class="cat-avail-tab" data-avail="todos" aria-selected="${st.avail === 'todos'}">
           <span class="cat-avail-ic">${icon('grid')}</span><span><b>Tudo</b><small>${products.length} modelos</small></span></button>
         <button type="button" role="tab" class="cat-avail-tab is-ready" data-avail="pronta" aria-selected="${st.avail === 'pronta'}">
-          <span class="cat-avail-ic">${icon('checkCircle')}</span><span><b>Pronta entrega</b><small>leva hoje</small></span></button>
+          <span class="cat-avail-ic">${icon('checkCircle')}</span><span><b>Pronta entrega</b></span></button>
         <button type="button" role="tab" class="cat-avail-tab is-order" data-avail="encomenda" aria-selected="${st.avail === 'encomenda'}">
           <span class="cat-avail-ic">${icon('truck')}</span><span><b>Sob encomenda</b><small>${esc(leadText())}</small></span></button>
       </div>` : ''}
@@ -315,8 +315,29 @@ function renderShell() {
     </main>
 
     <footer class="cat-foot">
-      <span class="cat-avatar sm"></span>
-      <p><b>${esc(name)}</b></p>
+      <div class="cat-foot-inner">
+        <div class="cat-foot-brand">
+          <span class="cat-avatar sm"></span>
+          <div><b>${esc(name)}</b><p>iPhone, Apple e games originais, com garantia e atendimento de perto.</p></div>
+        </div>
+        <div class="cat-foot-trust">
+          <span>${icon('checkCircle')} Garantia em todos os aparelhos</span>
+          <span>${icon('device')} Lacrados e seminovos revisados</span>
+          ${Number(s.installments) >= 2 ? `<span>${icon('card')} Parcelamos em até ${Number(s.installments)}x</span>` : `<span>${icon('card')} Pix, cartão e parcelamento</span>`}
+          <span>${icon('truck')} Retirada ou envio</span>
+        </div>
+        <div class="cat-foot-cols">
+          <div><h4>Atendimento</h4>
+            ${wa ? `<a href="${esc(wa)}" target="_blank" rel="noopener">${icon('whatsapp')} ${esc(maskPhone(s.phone) || 'WhatsApp')}</a>` : ''}
+            ${ig ? `<a href="https://instagram.com/${esc(ig)}" target="_blank" rel="noopener">${INSTAGRAM} @${esc(ig)}</a>` : ''}</div>
+          ${s.address ? `<div><h4>Onde estamos</h4><span>${icon('pin')} ${esc(s.address)}</span></div>` : ''}
+          <div><h4>Como comprar</h4><span>Escolha o modelo, monte a sacola e envie pelo WhatsApp - a loja confirma tudo com você.</span></div>
+        </div>
+        <div class="cat-foot-bottom">
+          <span>© ${new Date().getFullYear()} ${esc(name)}</span>
+          <span>Catálogo atualizado ${esc(updatedText())}</span>
+        </div>
+      </div>
     </footer>
 
     ${wa ? `<a class="cat-fab-wa" href="${esc(wa)}" target="_blank" rel="noopener" aria-label="Falar no WhatsApp">${icon('whatsapp')}</a>` : ''}
@@ -324,6 +345,13 @@ function renderShell() {
       ${icon('orders')}<span data-fab-text>Ver sacola</span><span class="cat-fab-total" data-fab-total></span>
     </button>`;
   renderCats();
+}
+
+/** "hoje às 14:32" / "em 28/10" - quando o catálogo foi gerado pelo banco. */
+function updatedText() {
+  const d = new Date(st.data?.generated_at || Date.now());
+  const today = new Date().toDateString() === d.toDateString();
+  return today ? `hoje às ${d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}` : `em ${d.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })}`;
 }
 
 /** Prazo da encomenda que mais aparece ("7 a 15 dias"). */
