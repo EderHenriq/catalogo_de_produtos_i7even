@@ -34,3 +34,7 @@ i7even-*.tar.gz
 # Testes: dependências e capturas de tela
 tests/node_modules/
 tests/out/
+
+# Fotos dos produtos (pasta de trabalho local, sobe pelo "Importar pasta de fotos"):
+# fotos de terceiros não vão para o repositório público nem para o site
+/Imagens/

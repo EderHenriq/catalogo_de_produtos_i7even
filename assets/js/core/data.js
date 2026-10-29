@@ -114,6 +114,13 @@ function settingsFromRow(r = {}) {
   };
 }
 
+function colorPhotosFromRow(raw) {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return {};
+  return Object.fromEntries(Object.entries(raw)
+    .map(([k, v]) => [k, (Array.isArray(v) ? v : [v]).filter((u) => typeof u === 'string' && u)])
+    .filter(([, v]) => v.length));
+}
+
 const SETTINGS_COLS = {
   storeName: 'store_name', phone: 'phone', instagram: 'instagram', email: 'email', address: 'address',
   pixKey: 'pix_key', footerText: 'footer_text', defaultMarkupPct: 'default_markup_pct',
@@ -133,7 +140,8 @@ const productFromRow = (r) => ({
   id: r.id, code: r.code, slug: r.slug || '', categoryId: r.category_id || null, name: r.name, brand: r.brand || '',
   year: r.year || null, description: r.description || '', imageUrl: r.image_url || '',
   gallery: Array.isArray(r.gallery) ? r.gallery.filter(Boolean) : [],
-  colorPhotos: r.color_photos && typeof r.color_photos === 'object' && !Array.isArray(r.color_photos) ? r.color_photos : {},
+  // { cor: [url, ...] } - a primeira é a foto da cor; as outras, o carrossel daquela cor
+  colorPhotos: colorPhotosFromRow(r.color_photos),
   storages: r.storages || [], colors: r.colors || [], sizes: r.sizes || [],
   tracksSerial: !!r.tracks_serial, showInCatalog: r.show_in_catalog !== false, featured: !!r.featured,
   needsReview: !!r.needs_review, notes: r.notes || '', active: r.active !== false,
@@ -911,7 +919,7 @@ export async function setColorPhoto(productId, color, url) {
   const p = product(productId);
   if (!p || !color) return 0;
   const next = { ...(p.colorPhotos || {}) };
-  if (url) next[color] = url; else delete next[color];
+  if (url) next[color] = [url, ...(next[color] || []).filter((u) => u !== url)].slice(0, 8); else delete next[color];
   mute('products');
   const { error } = await getClient().from('products').update({ color_photos: next }).eq('id', productId);
   if (error) throw error;
@@ -919,10 +927,26 @@ export async function setColorPhoto(productId, color, url) {
   return state.variants.filter((v) => v.productId === productId && v.color === color).length;
 }
 
+/**
+ * Fotos do modelo de uma vez (importar pasta de fotos): capa, fotos por cor
+ * e cores novas. `reloadAfter: false` deixa para recarregar no fim do lote.
+ */
+export async function patchProductMedia(id, { imageUrl, colorPhotos, colors } = {}, { reloadAfter = true } = {}) {
+  const row = {};
+  if (imageUrl !== undefined) row.image_url = imageUrl || null;
+  if (colorPhotos) row.color_photos = colorPhotos;
+  if (colors) row.colors = listOf(colors);
+  if (!Object.keys(row).length) return;
+  mute('products');
+  const { error } = await getClient().from('products').update(row).eq('id', id);
+  if (error) throw error;
+  if (reloadAfter) await reload('products');
+}
+
 /** A foto que a variação mostra: a dela, a da cor no modelo, ou a capa. */
 export function variantPhoto(v) {
   const p = product(v?.productId);
-  return v?.imageUrl || (v?.color && p?.colorPhotos?.[v.color]) || p?.imageUrl || '';
+  return v?.imageUrl || (v?.color && p?.colorPhotos?.[v.color]?.[0]) || p?.imageUrl || '';
 }
 
 /** Ajusta o valor de venda de uma oferta de encomenda (sem mexer no resto). */
@@ -1043,7 +1067,7 @@ export async function deleteProductImage(url, { except = null } = {}) {
   const marker = `/object/public/${APP.photoBucket}/`;
   const i = String(url || '').indexOf(marker);
   if (i < 0) return;
-  const used = state.products.some((p) => (p.imageUrl === url || p.gallery.includes(url) || Object.values(p.colorPhotos || {}).includes(url)) && p.id !== except)
+  const used = state.products.some((p) => (p.imageUrl === url || p.gallery.includes(url) || Object.values(p.colorPhotos || {}).flat().includes(url)) && p.id !== except)
     || state.variants.some((v) => v.imageUrl === url && v.id !== except)
     || state.categories.some((c) => c.image === url && c.id !== except);
   if (used) return;

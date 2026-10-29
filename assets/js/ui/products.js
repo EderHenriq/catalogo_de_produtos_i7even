@@ -58,6 +58,7 @@ export function mount(host, ctx) {
         <div class="row gap-2 wrap">
           <button class="btn" data-export>${icon('download')}<span class="hide-mobile">Exportar</span></button>
           <button class="btn" data-olist title="Colar a lista do WhatsApp (pronta entrega ou encomenda)">${icon('copy')}<span class="hide-mobile">Lista do WhatsApp</span></button>
+          <button class="btn hide-mobile" data-photo-import title="Importar pasta de fotos (no computador)">${icon('image')}<span>Fotos</span></button>
           <button class="btn" data-entry title="Entrada de mercadoria">${icon('truck')}<span class="hide-mobile">Entrada</span></button>
           <button class="btn btn-primary" data-new-product>${icon('plus')} Produto</button>
         </div>
@@ -244,6 +245,10 @@ export function mount(host, ctx) {
   host.addEventListener('click', (e) => {
     const t = e.target;
     if (t.closest('[data-new-product]')) { openQuickProduct({ categoryId: st.cat || null, onDone: render }); return; }
+    if (t.closest('[data-photo-import]')) {
+      import('./photo-import.js').then((m) => m.openPhotoImport({ onDone: render }));
+      return;
+    }
     if (t.closest('[data-olist]')) {
       import('./order-list-import.js').then((m) => m.openOrderListImport({ onDone: () => { host.querySelector('[data-filter="encomenda"]')?.click(); } }));
       return;
@@ -378,7 +383,7 @@ export function openProductSheet(productId) {
         <div class="fieldset-title">Fotos por cor <span class="dim small" style="font-weight:400;text-transform:none;letter-spacing:0">o cliente vê a foto da cor que escolher</span></div>
         <div class="color-photos">
           ${colors.map((c) => {
-            const photo = p.colorPhotos?.[c] || active.find((v) => v.color === c && v.imageUrl)?.imageUrl;
+            const photo = p.colorPhotos?.[c]?.[0] || active.find((v) => v.color === c && v.imageUrl)?.imageUrl;
             return `<button type="button" class="color-photo${photo ? ' has-photo' : ''}" data-color-photo="${esc(c)}" aria-label="Foto da cor ${esc(c)}">
               <span class="color-photo-img">${photo ? `<span class="thumb thumb-md"><img src="${esc(thumbUrl(photo))}" data-full="${esc(photo)}" alt="" loading="lazy"></span>` : icon('camera')}</span>
               <span class="color-photo-name">${esc(c)}</span></button>`;

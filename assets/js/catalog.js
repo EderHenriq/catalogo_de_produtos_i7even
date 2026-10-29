@@ -102,6 +102,9 @@ function defaultMode(v) {
 /** O preço que o cliente vê agora (com o filtro de cima). */
 const shownPrice = (v) => modePrice(v, st.avail === 'todos' ? (hasReady(v) ? 'pronta' : 'encomenda') : defaultMode(v));
 const bagKey = (id, mode) => `${id}|${mode}`;
+/** Fotos de uma cor do modelo (o banco guarda uma url ou uma lista). */
+const colorList = (p, color) => { const v = color ? p?.color_photos?.[color] : null; return (Array.isArray(v) ? v : v ? [v] : []).filter(Boolean); };
+const firstColorPhoto = (p) => Object.keys(p?.color_photos || {}).map((c) => colorList(p, c)[0]).find(Boolean) || '';
 
 function index(data) {
   products = data.products || [];
@@ -340,7 +343,7 @@ function renderCats() {
   box.hidden = cats.length < 2 && !st.cat;
   box.innerHTML = cats.map((c) => {
     // Sem foto da categoria: a capa do primeiro modelo dela (fica igual à imoove).
-    const cover = c.image || products.filter((p) => p.category_id === c.id).map((p) => p.image || Object.values(p.color_photos || {})[0]).find(Boolean) || '';
+    const cover = c.image || products.filter((p) => p.category_id === c.id).map((p) => p.image || firstColorPhoto(p)).find(Boolean) || '';
     return `<button type="button" class="cat-circle" data-cat="${esc(c.id)}" aria-pressed="${st.cat === c.id}">
       <span class="cat-circle-img">${cover ? `<img src="${esc(thumbUrl(cover))}" data-full="${esc(cover)}" alt="" loading="lazy">` : `<span aria-hidden="true">${esc(c.emoji || '📱')}</span>`}</span>
       <span class="cat-circle-name">${esc(c.name)}</span></button>`;
@@ -399,7 +402,7 @@ function cardHTML(p) {
   const colors = [...new Set(vs.map((v) => v.color).filter(Boolean))];
   const dots = colors.map((c) => [c, swatch(c)]).filter(([, d]) => d).slice(0, 6);
   // sem capa: a foto da primeira cor à venda
-  const img = p.image || vs.map((v) => v.image || p.color_photos?.[v.color]).find(Boolean) || Object.values(p.color_photos || {})[0] || '';
+  const img = p.image || vs.map((v) => v.image || colorList(p, v.color)[0]).find(Boolean) || firstColorPhoto(p) || '';
   const photos = 1 + (p.gallery || []).length;
   const inst = installmentText(min);
   return `
@@ -532,8 +535,10 @@ function openProduct(id) {
     const both = v && hasReady(v) && hasOrder(v);
     // Foto da cor escolhida: a da própria variação ou de outra da mesma cor
     // (a versão sob encomenda aproveita a foto da pronta entrega).
-    const vImg = v?.image || (v?.color && p.color_photos?.[v.color]) || (v?.color ? vs.find((x) => x.color === v.color && x.image)?.image : '') || '';
-    const shown = vImg && !photos.includes(vImg) ? [vImg, ...photos] : photos;
+    // Cor com fotos próprias: o carrossel é o daquela cor (como vitrine de loja).
+    const cl = colorList(p, v?.color);
+    const vImg = v?.image || cl[0] || (v?.color ? vs.find((x) => x.color === v.color && x.image)?.image : '') || '';
+    const shown = cl.length && !v?.image ? cl : vImg && !photos.includes(vImg) ? [vImg, ...photos] : photos.length ? photos : (vImg ? [vImg] : []);
     if (photoIdx >= shown.length) photoIdx = 0;
     dlg.innerHTML = `
       <div class="cat-sheet-panel">

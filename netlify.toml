@@ -113,6 +113,12 @@
   force = true
 
 [[redirects]]
+  from = "/Imagens/*"
+  to = "/404"
+  status = 404
+  force = true
+
+[[redirects]]
   from = "/.github/*"
   to = "/404"
   status = 404

@@ -584,3 +584,31 @@ button.variant-row:active { transform: scale(.995); }
 .chip-input { width: 130px; min-height: 34px; padding: 4px 12px; border-radius: 999px; font-size: var(--fs-sm); }
 [data-q] > .field { margin-bottom: 14px; }
 @media (max-width: 640px) { .chip-input { font-size: 16px; min-height: var(--tap-sm); width: 140px; } .qp-prices { grid-template-columns: 1fr 1fr; } }
+
+/* importar pasta de fotos */
+.pi-pick { display: flex; gap: 16px; align-items: flex-start; padding: 6px 2px; }
+.pi-pick p { margin: 0 0 10px; line-height: 1.5; }
+.pi-pick-ic { flex: none; width: 48px; height: 48px; display: grid; place-items: center; border-radius: 14px; background: var(--accent-soft); color: var(--accent); }
+.pi-pick-ic .icon { width: 24px; height: 24px; }
+.pi-summary { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 12px; }
+.pi-opts { display: flex; flex-wrap: wrap; gap: 10px 22px; align-items: center; padding: 12px; margin-bottom: 14px; border-radius: var(--r-md); background: var(--surface-2); }
+.pi-per { display: inline-flex; align-items: center; gap: 8px; }
+.pi-per .select { width: auto; min-height: 36px; padding-top: 4px; padding-bottom: 4px; }
+.pi-cat { margin-bottom: 12px; }
+.pi-models { display: flex; flex-direction: column; }
+.pi-model { padding: 10px 16px; border-top: 1px solid var(--divider); }
+.pi-model:first-child { border-top: 0; }
+.pi-model.is-new { background: var(--tone-amber-bg); }
+.pi-model-head { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-bottom: 6px; }
+.pi-colors { display: flex; flex-wrap: wrap; gap: 6px; }
+.pi-color { padding: 3px 10px; border-radius: 999px; background: var(--tone-green-bg); color: var(--tone-green-fg); font-size: var(--fs-xs); font-weight: 550; }
+.pi-color em { font-style: normal; opacity: .75; }
+.pi-color.is-skip { background: var(--surface-2); color: var(--text-3); }
+.pi-color.is-small { box-shadow: inset 0 0 0 1.5px var(--tone-red-dot, #d33); }
+.pi-details { margin-top: 10px; padding: 10px 12px; border-radius: var(--r-md); background: var(--surface-2); }
+.pi-details ul { margin: 8px 0 0; padding-left: 18px; display: flex; flex-direction: column; gap: 3px; }
+.pi-progress { padding: 30px 6px; text-align: center; }
+.pi-bar { height: 10px; border-radius: 999px; background: var(--surface-2); overflow: hidden; margin-bottom: 12px; }
+.pi-bar span { display: block; height: 100%; background: var(--accent); transition: width .2s ease; }
+.pi-done { text-align: center; padding: 24px 6px; }
+.pi-done-ic .icon { width: 44px; height: 44px; color: var(--tone-green-fg); }
