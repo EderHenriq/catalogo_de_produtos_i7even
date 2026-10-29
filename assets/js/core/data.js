@@ -1041,13 +1041,16 @@ export async function variantMovements(variantId, limit = 80) {
  * Android geram WebP; o Safari do iPhone não sabe gerar WebP e sai JPEG - o
  * nome e o tipo do arquivo acompanham o que foi gerado de verdade.
  */
-export async function uploadProductImage(file, { square = true } = {}) {
+export async function uploadProductImage(file, { square = true, name = '' } = {}) {
   const blob = await compressImage(file, PHOTO_PX, 0.9, { square, maxBytes: 950000 });
   const ext = blob.type === 'image/webp' ? 'webp' : 'jpg';
-  const path = `p/${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
+  // `name` fixo (importar pasta: o código do conteúdo) - a mesma foto cai no
+  // mesmo arquivo; se ele já está no Storage, aproveita em vez de duplicar.
+  const path = `p/${name || `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`}.${ext}`;
   const bucket = getClient().storage.from(APP.photoBucket);
   const { error } = await bucket.upload(path, blob, { contentType: blob.type, cacheControl: '31536000', upsert: false });
-  if (error) throw error;
+  const exists = error && (String(error.statusCode) === '409' || /exist|duplicate/i.test(error.message || ''));
+  if (error && !(name && exists)) throw error;
   // Miniatura (~15 KB) para listas e para a grade do catálogo no 4G do
   // cliente. Se falhar, nada quebra: a tela cai na foto grande.
   try {

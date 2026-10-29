@@ -3,7 +3,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { CATALOG } from '../../assets/js/data/catalog.js';
-import { planFolder, matchModel, matchColor, matchCategory } from '../../assets/js/core/photo-folder.js';
+import { planFolder, matchModel, matchColor, matchCategory, fileHash, photoHash, uniqueByHash } from '../../assets/js/core/photo-folder.js';
 
 const categories = CATALOG.map((c) => ({ id: c.id, slug: c.id, name: c.label }));
 const products = CATALOG.flatMap((c) => c.products.map((p) => ({ id: p.id, name: p.name, categoryId: c.id, colors: p.colors || [] })));
@@ -54,4 +54,24 @@ test('plano: categoria, capa do modelo, fotos por cor e o que fica de fora', () 
   const ps = plan.models.find((m) => m.product?.id === 'ps5-slim');
   assert.ok(ps.cover && ps.colors[0].color === 'Branco', 'capa do PS5 Slim e "Padrao" = Branco');
   assert.equal(plan.skipped.length, 2, plan.skipped.map((s) => s.reason).join(' | '));
+});
+
+test('foto repetida: mesmo conteúdo = mesmo código, com qualquer nome', async () => {
+  const a = new Blob([new Uint8Array([1, 2, 3, 4])]);
+  const copia = new Blob([new Uint8Array([1, 2, 3, 4])]);
+  const b = new Blob([new Uint8Array([9, 9, 9])]);
+  const [ha, hc, hb] = await Promise.all([fileHash(a), fileHash(copia), fileHash(b)]);
+  assert.match(ha, /^[0-9a-f]{20}$/);
+  assert.equal(ha, hc);
+  assert.notEqual(ha, hb);
+  const files = [{ path: 'a.png', h: ha }, { path: 'a (1).png', h: hc }, { path: 'b.png', h: hb }, { path: 'x.png', h: '' }];
+  assert.deepEqual(uniqueByHash(files, (f) => f.h).map((f) => f.path), ['a.png', 'b.png', 'x.png']);
+});
+
+test('código da foto pelo endereço (só fotos enviadas pela importação)', () => {
+  const h = '0123456789abcdef0123';
+  assert.equal(photoHash(`https://x.supabase.co/storage/v1/object/public/produtos/p/h-${h}.webp`), h);
+  assert.equal(photoHash(`https://x.supabase.co/storage/v1/object/public/produtos/p/h-${h}.jpg?v=2`), h);
+  assert.equal(photoHash('https://x.supabase.co/storage/v1/object/public/produtos/p/lx2a9-k3j4h.webp'), '');
+  assert.equal(photoHash(''), '');
 });

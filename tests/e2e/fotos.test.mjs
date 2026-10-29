@@ -16,6 +16,20 @@ const one = async (sql, p) => (await q(sql, p))[0];
 
 let DIR = fileURLToPath(new URL('../../Imagens/', import.meta.url));
 const real = fs.existsSync(DIR);
+if (real) {
+  // cópia congelada: a pasta real pode estar recebendo downloads agora
+  const snap = path.join(os.tmpdir(), `i7-imagens-${Date.now()}`, 'Imagens');
+  // (cópia à mão: fs.cpSync derruba o Node no Windows com acento no caminho)
+  const copy = (from, to) => {
+    fs.mkdirSync(to, { recursive: true });
+    for (const e of fs.readdirSync(from, { withFileTypes: true })) {
+      if (e.isDirectory()) copy(path.join(from, e.name), path.join(to, e.name));
+      else fs.copyFileSync(path.join(from, e.name), path.join(to, e.name));
+    }
+  };
+  copy(DIR, snap);
+  DIR = snap;
+}
 const { browser, page, errors } = await open(env, { device: 'Desktop' });
 if (!real) {
   // pasta de exemplo com PNGs gerados no navegador

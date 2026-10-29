@@ -123,3 +123,31 @@ export function planFolder(files, { categories = [], products = [] } = {}) {
     skipped,
   };
 }
+
+/* ------------------------------------------- fotos repetidas (conteúdo) -- */
+
+/**
+ * "Impressão digital" da foto: SHA-256 do conteúdo do arquivo. A mesma foto
+ * dá o mesmo código com qualquer nome ("foto.webp", "foto (1).webp").
+ */
+export async function fileHash(file) {
+  const buf = await crypto.subtle.digest('SHA-256', await file.arrayBuffer());
+  return [...new Uint8Array(buf).slice(0, 10)].map((b) => b.toString(16).padStart(2, '0')).join('');
+}
+
+/** Código da foto que a importação enviou (".../p/h-<código>.webp"); foto de antes: ''. */
+export function photoHash(url) {
+  return /\/p\/h-([0-9a-f]{20})\.[a-z]+(?:\?|$)/.exec(String(url || ''))?.[1] || '';
+}
+
+/** Tira da lista as fotos de conteúdo repetido (fica a primeira). */
+export function uniqueByHash(files, hashOf) {
+  const seen = new Set();
+  return files.filter((f) => {
+    const h = hashOf(f);
+    if (!h) return true;
+    if (seen.has(h)) return false;
+    seen.add(h);
+    return true;
+  });
+}
