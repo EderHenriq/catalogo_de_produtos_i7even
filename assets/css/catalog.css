@@ -993,3 +993,9 @@ body.catalog { background: var(--cat-page); isolation: isolate; }
   -webkit-backdrop-filter: blur(14px) saturate(170%); backdrop-filter: blur(14px) saturate(170%);
 }
 .cat-close:hover { background: linear-gradient(140deg, rgba(20, 21, 24, .86), rgba(20, 21, 24, .68)); }
+
+/* Foto sem "caixa": o branco da foto some no fundo do cartão/slide. O
+   multiply precisa do fundo no próprio quadro (isolado), senão mistura com
+   o transparente e o retângulo branco aparece (ficha no celular). */
+.cat-photo, .cat-slide { background: var(--cat-photo-bg); isolation: isolate; }
+.cat-slide img { animation: none; }

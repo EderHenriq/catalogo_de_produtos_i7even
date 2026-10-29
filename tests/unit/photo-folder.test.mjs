@@ -3,7 +3,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { CATALOG } from '../../assets/js/data/catalog.js';
-import { planFolder, matchModel, matchColor, matchCategory, fileHash, photoHash, uniqueByHash } from '../../assets/js/core/photo-folder.js';
+import { planFolder, matchModel, matchColor, matchCategory, fileHash, photoHash, uniqueByHash, photoMetrics, photoScore, orderByScore } from '../../assets/js/core/photo-folder.js';
 
 const categories = CATALOG.map((c) => ({ id: c.id, slug: c.id, name: c.label }));
 const products = CATALOG.flatMap((c) => c.products.map((p) => ({ id: p.id, name: p.name, categoryId: c.id, colors: p.colors || [] })));
@@ -70,8 +70,47 @@ test('foto repetida: mesmo conteúdo = mesmo código, com qualquer nome', async 
 
 test('código da foto pelo endereço (só fotos enviadas pela importação)', () => {
   const h = '0123456789abcdef0123';
-  assert.equal(photoHash(`https://x.supabase.co/storage/v1/object/public/produtos/p/h-${h}.webp`), h);
-  assert.equal(photoHash(`https://x.supabase.co/storage/v1/object/public/produtos/p/h-${h}.jpg?v=2`), h);
+  assert.equal(photoHash(`https://x.supabase.co/storage/v1/object/public/produtos/p/h2-${h}.webp`), h);
+  assert.equal(photoHash(`https://x.supabase.co/storage/v1/object/public/produtos/p/h2-${h}.jpg?v=2`), h);
   assert.equal(photoHash('https://x.supabase.co/storage/v1/object/public/produtos/p/lx2a9-k3j4h.webp'), '');
   assert.equal(photoHash(''), '');
+});
+
+/** Foto sintética 60×80 (RGBA): fundo branco e retângulos de cor. */
+function img(w, h, rects) {
+  const d = new Uint8ClampedArray(w * h * 4).fill(255);
+  for (const [x0, y0, x1, y1] of rects) {
+    for (let y = y0; y < y1; y++) for (let x = x0; x < x1; x++) { const i = (y * w + x) * 4; d[i] = 30; d[i + 1] = 60; d[i + 2] = 140; }
+  }
+  return d;
+}
+
+test('vitrine: frente + verso primeiro, close cortado e foto de lado por último', () => {
+  const W = 60; const H = 80;
+  // par de aparelhos com canto arredondado (como na foto: o lado não enche a borda)
+  const phone = (x0, y0, x1, y1, r = 5) => [[x0 + r, y0, x1 - r, y1], [x0, y0 + r, x1, y1 - r]];
+  const pair = img(W, H, [...phone(8, 10, 28, 70), ...phone(31, 10, 51, 70)]);
+  // close: o produto termina numa linha reta embaixo e à direita (cortado)
+  const close = img(W, H, [[10, 20, 52, 74], [14, 12, 52, 20]]);
+  // de lado: fininho
+  const side = img(W, H, [[27, 8, 33, 72]]);
+  const mp = photoMetrics(pair, W, H);
+  const mc = photoMetrics(close, W, H);
+  assert.equal(mp.touch, 0);
+  assert.ok(mp.aspect > 0.6 && mp.aspect < 0.92, `par com proporção de dois aparelhos (${mp.aspect})`);
+  assert.ok(mc.cut >= 2, `close tem lados retos (${mc.sides})`);
+  const files = [{ path: 'a/close.webp', m: mc }, { path: 'a/lado.webp', m: photoMetrics(side, W, H) }, { path: 'a/par.webp', m: mp }];
+  const order = orderByScore(files, (f) => photoScore(f.m, { pair: true })).map((f) => f.path.split('/').pop());
+  assert.equal(order[0], 'par.webp');
+  // marcada à mão ("00_...") vence a nota
+  files.push({ path: 'a/00_escolhida.webp', m: mc });
+  assert.equal(orderByScore(files, (f) => photoScore(f.m, { pair: true }))[0].path, 'a/00_escolhida.webp');
+});
+
+test('vitrine: foto de ambiente (fundo colorido) vai para o fim', () => {
+  const W = 40; const H = 40;
+  const d = new Uint8ClampedArray(W * H * 4);
+  for (let i = 0; i < d.length; i += 4) { d[i] = 120; d[i + 1] = 90; d[i + 2] = 60; d[i + 3] = 255; }
+  const m = photoMetrics(d, W, H);
+  assert.ok(m.bg < 0.5 && photoScore(m) < 60, JSON.stringify(m));
 });

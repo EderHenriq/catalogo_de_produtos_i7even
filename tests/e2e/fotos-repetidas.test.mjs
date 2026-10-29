@@ -51,7 +51,7 @@ ok(await page.locator('.pi-summary', { hasText: '1 repetidas na pasta' }).count(
 await enviar();
 let r = await one(`select color_photos from public.products where slug = 'iphone-12'`);
 ok(r.color_photos.Azul?.length === 2 && uploads() === 2, `Azul com 2 fotos, 2 no Storage (${uploads()})`);
-ok(r.color_photos.Azul.every((u) => /\/p\/h-[0-9a-f]{20}\./.test(u)), 'nome do arquivo = código do conteúdo');
+ok(r.color_photos.Azul.every((u) => /\/p\/h2-[0-9a-f]{20}\./.test(u)), 'nome do arquivo = código do conteúdo');
 
 console.log('2. importar de novo, igual');
 await importar();

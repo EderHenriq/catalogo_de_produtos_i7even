@@ -2,7 +2,8 @@
  * Pasta de fotos → plano de importação (puro: sem tela, sem banco - coberto
  * por tests/unit/photo-folder.test.mjs com a estrutura real da loja).
  *
- * A pasta segue Categoria / Modelo / Cor / fotos:
+ * A pasta segue Categoria / Modelo / Cor / fotos (a ordem: a melhor de
+ * vitrine primeiro - photoScore; arquivo "00..."/"capa..." vem antes):
  *
  *   Imagens/01_iPhone/categoria.webp                   → foto da CATEGORIA
  *   Imagens/01_iPhone/iPhone 11/capa.webp               → capa do MODELO
@@ -135,9 +136,16 @@ export async function fileHash(file) {
   return [...new Uint8Array(buf).slice(0, 10)].map((b) => b.toString(16).padStart(2, '0')).join('');
 }
 
-/** Código da foto que a importação enviou (".../p/h-<código>.webp"); foto de antes: ''. */
+/**
+ * Nome das fotos que a importação envia: "h2-<código do conteúdo>". O "2" é
+ * a versão do tratamento (fundo branco + recorte da vitrine): foto enviada
+ * com um tratamento antigo conta como "de antes" e pode ser trocada.
+ */
+export const PHOTO_PREFIX = 'h2-';
+
+/** Código da foto que a importação enviou (".../p/h2-<código>.webp"); foto de antes: ''. */
 export function photoHash(url) {
-  return /\/p\/h-([0-9a-f]{20})\.[a-z]+(?:\?|$)/.exec(String(url || ''))?.[1] || '';
+  return /\/p\/h2-([0-9a-f]{20})\.[a-z]+(?:\?|$)/.exec(String(url || ''))?.[1] || '';
 }
 
 /** Tira da lista as fotos de conteúdo repetido (fica a primeira). */
@@ -150,4 +158,95 @@ export function uniqueByHash(files, hashOf) {
     seen.add(h);
     return true;
   });
+}
+
+/* ---------------------------------------- ordem das fotos (vitrine) -- */
+
+const isBg = (r, g, b) => Math.min(r, g, b) > 228 && Math.max(r, g, b) - Math.min(r, g, b) < 16;
+
+/**
+ * Medidas de uma foto reduzida (RGBA, ~96 px de largura): onde está o
+ * produto (fundo branco em volta), se encosta nas bordas (foto cortada),
+ * quanto do quadro ocupa e a proporção do recorte.
+ */
+export function photoMetrics(data, w, h) {
+  // fundo = o quase branco LIGADO à borda (preenchido a partir dela): o
+  // prateado/branco do próprio aparelho não conta como fundo
+  const bgPx = (k) => { const i = k * 4; return data[i + 3] < 20 || isBg(data[i], data[i + 1], data[i + 2]); };
+  const bg = new Uint8Array(w * h);
+  const stack = [];
+  const push = (k) => { if (!bg[k] && bgPx(k)) { bg[k] = 1; stack.push(k); } };
+  for (let x = 0; x < w; x++) { push(x); push((h - 1) * w + x); }
+  for (let y = 0; y < h; y++) { push(y * w); push(y * w + w - 1); }
+  while (stack.length) {
+    const k = stack.pop();
+    const x = k % w;
+    if (x > 0) push(k - 1);
+    if (x < w - 1) push(k + 1);
+    if (k >= w) push(k - w);
+    if (k < w * (h - 1)) push(k + w);
+  }
+  let minX = w; let minY = h; let maxX = -1; let maxY = -1; let n = 0;
+  let edge = 0; let edgeBg = 0;
+  const bandX = Math.max(1, Math.round(w * 0.04));
+  const bandY = Math.max(1, Math.round(h * 0.04));
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) {
+      const k = y * w + x;
+      if (x < bandX || x >= w - bandX || y < bandY || y >= h - bandY) { edge++; if (bg[k]) edgeBg++; }
+      if (bg[k]) continue;
+      n++;
+      if (x < minX) minX = x; if (x > maxX) maxX = x;
+      if (y < minY) minY = y; if (y > maxY) maxY = y;
+    }
+  }
+  if (!n) return { bg: 1, touch: 0, fill: 0, aspect: 1, dense: 0, cut: 0 };
+  const bw = maxX - minX + 1; const bh = maxY - minY + 1;
+  const m = [minX / w, (w - 1 - maxX) / w, minY / h, (h - 1 - maxY) / h];
+  // lado reto e cheio = produto cortado por uma linha (close, recorte):
+  // aparelho inteiro tem canto arredondado e não enche a linha da borda
+  const rowFill = (y) => { let c = 0; for (let x = minX; x <= maxX; x++) c += 1 - bg[y * w + x]; return c / bw; };
+  const colFill = (x) => { let c = 0; for (let y = minY; y <= maxY; y++) c += 1 - bg[y * w + x]; return c / bh; };
+  const sides = [rowFill(minY), rowFill(maxY), colFill(minX), colFill(maxX)];
+  return {
+    cut: sides.filter((f) => f >= 0.93).length, // lados cortados em linha reta
+    sides: sides.map((f) => Math.round(f * 100) / 100).join('/'),
+    bg: edgeBg / edge,                         // borda branca (foto de estúdio ≈ 1)
+    touch: m.filter((v) => v < 0.015).length,  // lados em que o produto encosta (cortado)
+    fill: (bw * bh) / (w * h),                 // quanto do quadro o produto ocupa
+    aspect: bw / bh,                           // largura ÷ altura do produto
+    dense: n / (bw * bh),                      // recorte cheio (close/retângulo) ≈ 1
+  };
+}
+
+/**
+ * Nota de vitrine (maior = primeiro). Vai para o fim: produto cortado
+ * (close), fundo que não é branco (foto de ambiente), produto encostado na
+ * borda, vista de lado (fininho) ou miúdo demais no quadro. `pair` (iPhone):
+ * a foto de frente + verso lado a lado (largura ≈ 0,6-0,9 da altura) vem
+ * primeiro; depois a de um aparelho só.
+ */
+export function photoScore(m, { pair = false } = {}) {
+  if (!m) return -999;
+  let s = 100;
+  s -= Math.min(m.cut, 3) * 30;
+  if (m.bg < 0.9) s -= 45;
+  s -= m.touch * 20;
+  if (m.aspect < 0.3) s -= 35;
+  if (m.fill < 0.12) s -= 25;
+  if (pair) {
+    if (m.aspect >= 0.6 && m.aspect <= 0.92) s += 25;
+    else if (m.aspect >= 0.4 && m.aspect < 0.6) s += 10;
+    else if (m.aspect > 0.95) s -= 15;
+  }
+  return s;
+}
+
+/** Arquivo marcado à mão como a primeira foto: "00...", "capa...", "principal...". */
+export const isPinned = (path) => /^(00|capa|principal)/i.test(String(path || '').split(/[\\/]/).pop());
+
+/** A foto de vitrine primeiro; a marcada à mão vence; a ordem do arquivo desempata. */
+export function orderByScore(files, scoreOf) {
+  return files.map((f, i) => ({ f, i, s: (isPinned(f.path) ? 1000 : 0) + scoreOf(f) }))
+    .sort((a, b) => b.s - a.s || a.i - b.i).map((x) => x.f);
 }

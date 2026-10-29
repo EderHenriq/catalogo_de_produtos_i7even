@@ -14,7 +14,7 @@
  */
 
 import * as Data from '../core/data.js';
-import { planFolder, fileHash, photoHash, uniqueByHash } from '../core/photo-folder.js';
+import { planFolder, fileHash, photoHash, uniqueByHash, photoMetrics, photoScore, orderByScore, PHOTO_PREFIX } from '../core/photo-folder.js';
 import { friendlyError } from '../core/errors.js';
 import { esc } from '../core/utils.js';
 import { openModal, toast, toastError, confirmDialog } from './kit.js';
@@ -78,11 +78,31 @@ export function openPhotoImport({ onDone } = {}) {
         repeated += n - col.files.length;
       }
     }
+    // tamanho e medidas de vitrine de cada foto (de 6 em 6: pasta grande não estoura a memória)
     dims = new Map();
-    const all = allFiles();
-    await Promise.all(all.map(async (f) => {
-      try { const bmp = await createImageBitmap(f.file); dims.set(f, Math.max(bmp.width, bmp.height)); bmp.close?.(); } catch { dims.set(f, 0); }
-    }));
+    const metrics = new Map();
+    const all = [...plan.categories.map((c) => c.cover), ...plan.models.flatMap((m) => [m.cover, ...m.colors.flatMap((c) => c.files)])].filter(Boolean);
+    for (let i = 0; i < all.length; i += 6) {
+      await Promise.all(all.slice(i, i + 6).map(async (f) => {
+        try {
+          const bmp = await createImageBitmap(f.file);
+          dims.set(f, Math.max(bmp.width, bmp.height));
+          const W = 96;
+          const H = Math.max(1, Math.round((96 * bmp.height) / bmp.width));
+          const c = document.createElement('canvas');
+          c.width = W; c.height = H;
+          const g = c.getContext('2d', { willReadFrequently: true });
+          g.drawImage(bmp, 0, 0, W, H);
+          metrics.set(f, photoMetrics(g.getImageData(0, 0, W, H).data, W, H));
+          bmp.close?.();
+        } catch { dims.set(f, 0); }
+      }));
+    }
+    // a foto que vende primeiro: inteira, fundo branco; no iPhone, frente + verso
+    for (const m of plan.models) {
+      const pair = /iphone/i.test(m.product?.name || m.folder);
+      for (const col of m.colors) col.files = orderByScore(col.files, (f) => (broken(f) ? -999 : photoScore(metrics.get(f), { pair })));
+    }
     renderPlan();
   }
 
@@ -171,7 +191,7 @@ export function openPhotoImport({ onDone } = {}) {
       </div>
       <div class="pi-opts">
         <label class="check"><input type="checkbox" data-opt="replace" ${opts.replace ? 'checked' : ''}><span class="box"></span>
-          <span>Trocar também as fotos que já existem <span class="xs dim block">desmarcado: só preenche o que está sem foto (seguro para rodar de novo)</span></span></label>
+          <span>Trocar também as fotos que já existem <span class="xs dim block">marque uma vez para reorganizar e tratar as fotos que já estão no catálogo (a melhor de vitrine primeiro, fundo branco, mesmo tamanho). Desmarcado: só preenche o que está sem foto.</span></span></label>
         <label class="check"><input type="checkbox" data-opt="create" ${opts.create ? 'checked' : ''}><span class="box"></span>
           <span>Criar os modelos que não estão no cadastro</span></label>
         <label class="pi-per"><span class="small">Fotos por cor</span>
@@ -228,7 +248,7 @@ export function openPhotoImport({ onDone } = {}) {
       if (h && known.has(h)) { done += 1; reused += 1; return known.get(h); }   // já está no sistema: não sobe de novo
       prog();
       try {
-        const url = await Data.uploadProductImage(f.file, { square: true, name: h ? `h-${h}` : '' });
+        const url = await Data.uploadProductImage(f.file, { square: true, name: h ? `${PHOTO_PREFIX}${h}` : '' });
         if (h) known.set(h, url);
         return url;
       } catch (err) { errors.push(`${f.path}: ${friendlyError(err)}`); return ''; } finally { done += 1; }

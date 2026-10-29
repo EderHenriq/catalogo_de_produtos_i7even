@@ -1112,6 +1112,74 @@ export async function deleteProductImage(url, { except = null } = {}) {
  */
 const PHOTO_PX = 1600;
 
+/**
+ * Foto de vitrine: o fundo quase branco que encosta nas bordas (o cinza
+ * claro das fotos da Apple, sombra de estúdio) vira branco puro - só o
+ * FUNDO, preenchido a partir das bordas, então o reflexo branco do aparelho
+ * fica -, a sobra de margem é cortada e o produto vai para o meio de um
+ * quadrado com a mesma margem (8%) em todas as fotos. Resultado: todos os
+ * cartões do catálogo com o produto do mesmo tamanho e sem "caixa" cinza.
+ */
+const VITRINE_MARGIN = 0.08;
+function vitrineSquare(bmp, max) {
+  const scale = Math.min(1, max / Math.max(bmp.width, bmp.height));
+  const w = Math.max(1, Math.round(bmp.width * scale));
+  const h = Math.max(1, Math.round(bmp.height * scale));
+  const work = document.createElement('canvas');
+  work.width = w; work.height = h;
+  const wctx = work.getContext('2d', { willReadFrequently: true });
+  wctx.imageSmoothingQuality = 'high';
+  wctx.fillStyle = '#fff';
+  wctx.fillRect(0, 0, w, h);
+  wctx.drawImage(bmp, 0, 0, w, h);
+  const img = wctx.getImageData(0, 0, w, h);
+  const d = img.data;
+  const near = (i) => { const r = d[i], g = d[i + 1], b = d[i + 2]; const lo = Math.min(r, g, b); return lo >= 232 && Math.max(r, g, b) - lo <= 14; };
+  // preenche o fundo a partir das bordas (pilha de índices de pixel)
+  const seen = new Uint8Array(w * h);
+  const stack = new Int32Array(w * h);
+  let top = 0;
+  const push = (k) => { if (!seen[k] && near(k * 4)) { seen[k] = 1; stack[top++] = k; } };
+  for (let x = 0; x < w; x++) { push(x); push((h - 1) * w + x); }
+  for (let y = 0; y < h; y++) { push(y * w); push(y * w + w - 1); }
+  while (top) {
+    const k = stack[--top];
+    const i = k * 4;
+    d[i] = 255; d[i + 1] = 255; d[i + 2] = 255;
+    const x = k % w;
+    if (x > 0) push(k - 1);
+    if (x < w - 1) push(k + 1);
+    if (k >= w) push(k - w);
+    if (k < w * (h - 1)) push(k + w);
+  }
+  // onde está o produto (o que não virou fundo)
+  let minX = w, minY = h, maxX = -1, maxY = -1;
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) {
+      if (seen[y * w + x]) continue;
+      if (x < minX) minX = x; if (x > maxX) maxX = x;
+      if (y < minY) minY = y; if (y > maxY) maxY = y;
+    }
+  }
+  wctx.putImageData(img, 0, 0);
+  if (maxX < 0) { minX = 0; minY = 0; maxX = w - 1; maxY = h - 1; }
+  const cw = maxX - minX + 1;
+  const ch = maxY - minY + 1;
+  // lado final ≤ max, com a margem igual em volta
+  const fit = Math.min(1, (max * (1 - 2 * VITRINE_MARGIN)) / Math.max(cw, ch));
+  const tw = Math.round(cw * fit);
+  const th = Math.round(ch * fit);
+  const side = Math.round(Math.max(tw, th) / (1 - 2 * VITRINE_MARGIN));
+  const out = document.createElement('canvas');
+  out.width = side; out.height = side;
+  const ctx = out.getContext('2d');
+  ctx.imageSmoothingQuality = 'high';
+  ctx.fillStyle = '#fff';
+  ctx.fillRect(0, 0, side, side);
+  ctx.drawImage(work, minX, minY, cw, ch, Math.round((side - tw) / 2), Math.round((side - th) / 2), tw, th);
+  return out;
+}
+
 async function compressImage(file, max, quality, { square = false, maxBytes = 0 } = {}) {
   let bmp;
   try {
@@ -1130,23 +1198,18 @@ async function compressImage(file, max, quality, { square = false, maxBytes = 0 
       setTimeout(() => URL.revokeObjectURL(url), 1000);
     }
   }
-  const w = bmp.width;
-  const h = bmp.height;
-  // No quadrado a margem de respiro (6%) entra na conta: o lado final não passa de `max`.
-  const scale = Math.min(1, (square ? max / 1.06 : max) / Math.max(w, h));
-  const dw = Math.round(w * scale);
-  const dh = Math.round(h * scale);
-  const canvas = document.createElement('canvas');
-  // Quadrado: lado = o maior lado + uma margem de respiro (6%).
-  const side = Math.round(Math.max(dw, dh) * 1.06);
-  canvas.width = square ? side : dw;
-  canvas.height = square ? side : dh;
-  const ctx = canvas.getContext('2d');
-  ctx.imageSmoothingQuality = 'high';
-  // Fundo branco: PNG transparente virando JPEG ficaria com fundo preto.
-  ctx.fillStyle = '#fff';
-  ctx.fillRect(0, 0, canvas.width, canvas.height);
-  ctx.drawImage(bmp, Math.round((canvas.width - dw) / 2), Math.round((canvas.height - dh) / 2), dw, dh);
+  const canvas = square ? vitrineSquare(bmp, max) : document.createElement('canvas');
+  if (!square) {
+    const scale = Math.min(1, max / Math.max(bmp.width, bmp.height));
+    canvas.width = Math.round(bmp.width * scale);
+    canvas.height = Math.round(bmp.height * scale);
+    const ctx = canvas.getContext('2d');
+    ctx.imageSmoothingQuality = 'high';
+    // Fundo branco: PNG transparente virando JPEG ficaria com fundo preto.
+    ctx.fillStyle = '#fff';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.drawImage(bmp, 0, 0, canvas.width, canvas.height);
+  }
   bmp.close?.();
   const encode = async (q) => {
     const out = await new Promise((resolve) => canvas.toBlob(resolve, 'image/webp', q));
