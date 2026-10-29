@@ -234,7 +234,7 @@ export function openPurchaseForm({ variantId = null } = {}) {
           </div>
           ${l.serial ? `
             <div class="imei-list">
-              <span class="label">Aparelhos (${l.units.length}) - IMEI obrigatório</span>
+              <span class="label">Aparelhos (${l.units.length}) - IMEI opcional</span>
               ${l.units.map((u, j) => `
                 <div class="unit-form-row" data-uj="${j}">
                   <div class="field grow-2"><input class="input mono" data-uf="serial" maxlength="40" inputmode="numeric" autocomplete="off" value="${esc(u.serial)}" placeholder="IMEI ${j + 1}" aria-label="IMEI ${j + 1}"></div>
@@ -369,10 +369,11 @@ export function openPurchaseForm({ variantId = null } = {}) {
     const seen = new Set();
     for (const l of d.lines) {
       if (!l.serial) continue;
-      l.units = l.units.filter((u) => u.serial.trim());
-      if (!l.units.length) { showError(`Informe o IMEI dos aparelhos de ${Data.product(l.productId)?.name}.`); renderLines(); return; }
+      // IMEI opcional: linha em branco = aparelho sem IMEI (dá para anotar depois)
+      if (!l.units.length) { showError(`Adicione pelo menos um aparelho de ${Data.product(l.productId)?.name}.`); renderLines(); return; }
       for (const u of l.units) {
         const s = u.serial.trim().toUpperCase();
+        if (!s) continue;
         if (seen.has(s)) { showError(`O IMEI ${u.serial} aparece duas vezes na nota.`); return; }
         seen.add(s);
       }

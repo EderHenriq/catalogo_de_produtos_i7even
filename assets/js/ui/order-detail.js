@@ -90,7 +90,7 @@ export function openOrderDetail(orderId, { onChanged } = {}) {
                     .filter(Boolean).map((x) => `<span class="tag">${esc(x)}</span>`).join('')}
                   ${it.band ? `<span class="tag">${esc(it.band)}</span>` : ''}
                   ${it.serial ? `<span class="tag mono">${icon('device')} ${esc(it.serial)}</span>` : ''}
-                  ${needsSerial(it) ? `<span class="tag tone-amber">${icon('alert')} IMEI a definir</span>` : ''}
+                  ${needsSerial(it) ? `<span class="tag">${icon('device')} sem IMEI anotado</span>` : ''}
                   ${it.warrantyDays ? `<span class="tag">${esc(warrantyText(it, order))}</span>` : ''}
                 </div>
                 ${it.note ? `<div class="xs dim" style="margin-top:5px">${esc(it.note)}</div>` : ''}

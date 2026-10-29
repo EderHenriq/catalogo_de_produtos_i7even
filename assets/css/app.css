@@ -547,3 +547,40 @@ button.variant-row:active { transform: scale(.995); }
 .color-photo:hover .color-photo-img { transform: scale(1.04); }
 .color-photo.is-busy { opacity: .5; pointer-events: none; }
 .color-photo-name { max-width: 100%; overflow: hidden; text-overflow: ellipsis; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+
+/* lista do WhatsApp: pronta entrega × encomenda, modelos que faltam, quantidade */
+.olist-modes { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 14px; }
+.olist-mode { display: flex; gap: 12px; align-items: flex-start; padding: 14px; text-align: left; border: 1.5px solid var(--border); border-radius: var(--r-md); background: var(--surface); color: var(--text); cursor: pointer; transition: border-color .15s, box-shadow .15s; }
+.olist-mode > .icon { flex: none; width: 22px; height: 22px; margin-top: 1px; color: var(--text-3); }
+.olist-mode b { display: block; font-size: var(--fs-md); }
+.olist-mode small { display: block; margin-top: 3px; font-size: var(--fs-xs); color: var(--text-3); line-height: 1.4; }
+.olist-mode[aria-checked='true'] { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-ring); }
+.olist-mode[aria-checked='true'] > .icon { color: var(--accent); }
+.olist-missing { display: flex; flex-direction: column; gap: 8px; padding: 12px; margin-bottom: 12px; border-radius: var(--r-md); background: var(--tone-amber-bg); color: var(--tone-amber-fg); }
+.olist-missing .icon { width: 16px; height: 16px; vertical-align: -3px; }
+.olist-miss-row { display: flex; align-items: center; gap: 10px; padding: 8px 10px; border-radius: 10px; background: var(--surface); color: var(--text); }
+.olist-qty { display: inline-flex; align-items: center; gap: 4px; }
+.olist-qty .input { width: 64px; min-height: 36px; padding: 4px 8px; text-align: center; }
+@media (max-width: 640px) { .olist-modes { grid-template-columns: 1fr; } .olist-qty .input { font-size: 16px; } }
+.noimei-box { display: flex; flex-wrap: wrap; gap: 12px; align-items: flex-end; padding: 12px; margin: 10px 0 14px; border-radius: var(--r-md); background: var(--surface-2); }
+
+/* Blocos dentro das abas (Catálogo, Ajustes...): mesmo respiro da tela */
+[data-tab-body] { display: flex; flex-direction: column; gap: var(--sp-5); min-width: 0; }
+.card-head h3 { display: flex; align-items: center; gap: 8px; }
+.card-head h3 .icon { width: 18px; height: 18px; color: var(--text-2); }
+.banner-btn > .icon:last-child { width: 18px; height: 18px; flex: none; opacity: .7; }
+.alert-list { display: flex; flex-direction: column; gap: 8px; }
+@media (max-width: 640px) { [data-tab-body] { gap: var(--sp-4); } }
+
+/* cadastro rápido */
+.qp-modes { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin: 4px 0 14px; }
+.qp-mode { display: flex; gap: 10px; align-items: center; min-height: 56px; padding: 10px 12px; text-align: left; border: 1.5px solid var(--border); border-radius: var(--r-md); background: var(--surface); color: var(--text); cursor: pointer; }
+.qp-mode > .icon { width: 22px; height: 22px; color: var(--text-3); }
+.qp-mode b { display: block; }
+.qp-mode small { display: block; font-size: var(--fs-xs); color: var(--text-3); }
+.qp-mode[aria-checked='true'] { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-ring); }
+.qp-mode[aria-checked='true'] > .icon { color: var(--accent); }
+.qp-prices { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 10px; margin-top: 4px; }
+.chip-input { width: 130px; min-height: 34px; padding: 4px 12px; border-radius: 999px; font-size: var(--fs-sm); }
+[data-q] > .field { margin-bottom: 14px; }
+@media (max-width: 640px) { .chip-input { font-size: 16px; min-height: var(--tap-sm); width: 140px; } .qp-prices { grid-template-columns: 1fr 1fr; } }

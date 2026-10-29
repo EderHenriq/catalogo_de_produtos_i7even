@@ -270,9 +270,10 @@ const AIRPODS = [
 /* ---------------------------------------------------------------- Consoles */
 
 const CONSOLES = [
-  { id: 'ps5-slim', name: 'PlayStation 5 Slim', year: 2023, storages: ['Com leitor (1TB)', 'Digital (1TB)'], colors: ['Branco'] },
-  { id: 'ps5-pro', name: 'PlayStation 5 Pro', year: 2024, storages: ['2TB'], colors: ['Branco'] },
-  { id: 'ps5-fat', name: 'PlayStation 5 (modelo antigo)', year: 2020, storages: ['Com leitor (825GB)', 'Digital (825GB)'], colors: ['Branco'] },
+  // PS5: VERSÃO (com leitor de disco ou digital) e ARMAZENAMENTO separados
+  { id: 'ps5-slim', name: 'PlayStation 5 Slim', year: 2023, sizes: ['Com leitor de disco', 'Digital (sem leitor)'], storages: ['1TB', '825GB'], colors: ['Branco'] },
+  { id: 'ps5-pro', name: 'PlayStation 5 Pro', year: 2024, sizes: ['Digital (leitor vendido à parte)', 'Com leitor de disco'], storages: ['2TB'], colors: ['Branco'] },
+  { id: 'ps5-fat', name: 'PlayStation 5 (modelo antigo)', year: 2020, sizes: ['Com leitor de disco', 'Digital (sem leitor)'], storages: ['825GB'], colors: ['Branco'] },
   { id: 'ps-portal', name: 'PlayStation Portal', year: 2023, storages: ['Padrão'], colors: ['Branco'] },
   { id: 'dualsense', name: 'Controle DualSense', year: 2020, storages: ['Padrão', 'Edge'],
     colors: ['Branco', 'Preto', 'Vermelho', 'Azul', 'Roxo', 'Cinza camuflado', 'Outra cor'] },
@@ -335,7 +336,7 @@ export const CATALOG = [
   { id: 'macbook',   label: 'MacBook',      emoji: '💻', variantLabel: 'RAM / SSD',     products: MACBOOKS },
   { id: 'ipad',      label: 'iPad',         emoji: '📋', variantLabel: 'Armazenamento', products: IPADS },
   { id: 'airpods',   label: 'AirPods',      emoji: '🎧', variantLabel: 'Versão',        products: AIRPODS },
-  { id: 'console',   label: 'Consoles',     emoji: '🎮', variantLabel: 'Versão',        products: CONSOLES },
+  { id: 'console',   label: 'Consoles',     emoji: '🎮', variantLabel: 'Armazenamento', sizeLabel: 'Versão', products: CONSOLES },
   { id: 'perfume',   label: 'Perfumes',     emoji: '🧴', variantLabel: 'Tamanho', colorLabel: 'Concentração', products: PERFUMES },
   { id: 'acessorio', label: 'Acessórios',   emoji: '🔌', variantLabel: 'Tipo',          products: ACESSORIOS },
 ];

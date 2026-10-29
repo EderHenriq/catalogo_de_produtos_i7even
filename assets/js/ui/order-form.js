@@ -148,7 +148,7 @@ export function openOrderForm({ order = null, prefill = null, onSaved } = {}) {
                 .filter(Boolean).map((t) => `<span class="tag">${esc(t)}</span>`).join('')}
               ${it.serial ? `<span class="tag mono">${icon('device')} ${esc(it.serial)}</span>` : ''}
               ${it.qty > 1 ? `<span class="tag">${esc(it.qty)}×</span>` : ''}
-              ${needsSerial(it) ? `<span class="tag tone-amber">${icon('alert')} IMEI a definir</span>` : ''}
+              ${needsSerial(it) ? `<span class="tag">${icon('device')} aparelho do estoque (IMEI opcional)</span>` : ''}
               ${!it.variantId && !Data.product(it.productId) ? '<span class="tag">avulso</span>' : ''}
             </div>
             ${it.note ? `<div class="xs dim" style="margin-top:5px">${esc(it.note)}</div>` : ''}
@@ -384,10 +384,7 @@ export function openOrderForm({ order = null, prefill = null, onSaved } = {}) {
     // terminou e o currentTarget vira null - o salvamento quebrava em
     // silêncio quando passava pela confirmação acima.
     // Encomenda chegando a "Em entrega"/"Finalizado" sem o IMEI: avisa antes do banco recusar.
-    if (['enviado', 'entregue'].includes(draft.status) && draft.items.some(needsSerial)) {
-      toast('Escolha o IMEI dos aparelhos', { kind: 'warn', text: 'Toque no item marcado "IMEI a definir" - sem ele o pedido não vai para Em entrega/Finalizado.' });
-      return;
-    }
+    // IMEI é opcional: sem o aparelho escolhido, o sistema separa um do estoque.
 
     // Parcelas que não fecham com o total (o pedido mudou depois de montar).
     if (draft.status !== 'orcamento' && draft.status !== 'cancelado' && !plan.fits()) {

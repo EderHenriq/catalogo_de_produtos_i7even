@@ -30,7 +30,7 @@ export function matches(query, ...fields) {
  * miniatura cai na grande (data-full + installThumbFallback).
  */
 export function productThumb(p, size = 'md', v = null) {
-  const url = v?.imageUrl || p?.imageUrl || '';
+  const url = v?.imageUrl || (v?.color && p?.colorPhotos?.[v.color]) || p?.imageUrl || Object.values(p?.colorPhotos || {})[0] || '';
   if (url) {
     const src = size === 'lg' || size === 'xl' ? url : thumbUrl(url);
     return `<span class="thumb thumb-${size}"><img src="${esc(src)}" data-full="${esc(url)}" alt="" loading="lazy" decoding="async"></span>`;

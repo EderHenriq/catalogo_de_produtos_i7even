@@ -262,8 +262,25 @@ r = await one(`select stock, cost from public.product_variants where id = $1`, [
 ok(r.stock === 30 && Math.abs(n(r.cost) - 14.7685) < 0.001, `capa: 10 + 20 = 30, custo médio ${r.cost}`);
 await expectError(`select public.post_purchase($1::jsonb)`, /já está no estoque/, 'IMEI repetido é recusado',
   [JSON.stringify({ items: [{ variant_id: v128.id, unit_cost: 1, units: [{ serial: '350000000000001' }] }] })]);
-await expectError(`select public.post_purchase($1::jsonb)`, /informe o IMEI/i, 'aparelho sem IMEI é recusado',
-  [JSON.stringify({ items: [{ variant_id: v128.id, qty: 1, unit_cost: 1 }] })]);
+// IMEI opcional (v2.1): entrada por quantidade num modelo com IMEI cria aparelhos sem IMEI
+const vNoImei = (await one(`insert into public.product_variants (product_id, storage, color, condition, price)
+  values ($1, '64GB', 'Teste', 'Seminovo', 0) returning id`, [iph15])).id;
+r = await rpc('post_purchase', { items: [{ variant_id: vNoImei, qty: 2, unit_cost: 1000 }] });
+r = await one(`select stock, (select count(*)::int from public.units where variant_id = $1 and serial is null) n from public.product_variants where id = $1`, [vNoImei]);
+ok(r.stock === 2 && r.n === 2, `entrada sem IMEI: 2 aparelhos sem IMEI no estoque (${r.stock})`);
+r = await one(`select public.add_units($1, $2::jsonb) n`, [vNoImei, JSON.stringify([{ cost: 900 }])]);
+ok(r.n === 1, 'cadastrar aparelho sem IMEI também vale');
+const oNo = await rpc('save_order', { status: 'pago', customer_name: 'Sem IMEI', items: [{ variant_id: vNoImei, product_name: 'iPhone 15', qty: 2, unit_price: 2000 }],
+  payments: [{ amount: 4000, method: 'PIX' }] });
+r = await one(`select cardinality(unit_ids) n from public.order_items where order_id = $1`, [oNo.id]);
+ok(r.n === 2, 'venda sem escolher o aparelho: o sistema separa 2 do estoque sozinho');
+r = await one(`select stock from public.product_variants where id = $1`, [vNoImei]);
+ok(r.stock === 1, `estoque 3 → 1 (${r.stock})`);
+r = await one(`select status from public.set_order_status($1, 'entregue')`, [oNo.id]);
+ok(r.status === 'entregue', 'finaliza sem pedir IMEI');
+await db.query(`select public.delete_order($1)`, [oNo.id]);
+r = await one(`select stock from public.product_variants where id = $1`, [vNoImei]);
+ok(r.stock === 3, 'excluir a venda devolve os aparelhos (3)');
 r = await rpc('add_units', null).catch(() => null);
 r = await one(`select public.add_units($1, $2::jsonb, 'troca') n`, [v256, JSON.stringify([{ serial: '350000000000009', cost: 4100, battery_health: 88 }])]);
 ok(r.n === 1, 'aparelho avulso (troca/estoque inicial) entra com add_units');
@@ -316,9 +333,10 @@ const o2 = await rpc('save_order', {
 });
 r = await one(`select v.id, v.price, v.stock from public.order_items oi join public.product_variants v on v.id = oi.variant_id where oi.order_id = $1`, [o2.id]);
 ok(r && n(r.price) === 6200 && r.stock === 0, 'encomenda cria a variação 512GB · Rosa (preço do pedido, sem estoque)');
-await expectError(`select public.set_order_status($1, 'entregue')`, /Escolha o IMEI[\s\S]*iPhone 15 \(0 de 1\)/,
-  'finalizar sem escolher o IMEI é recusado', [o2.id]);
-await expectError(`select public.set_order_status($1, 'enviado')`, /Em entrega/, '"Em entrega" também exige o IMEI', [o2.id]);
+r = await one(`select status from public.set_order_status($1, 'enviado')`, [o2.id]);
+ok(r.status === 'enviado', 'encomenda sem aparelho no estoque pode ir para "Em entrega" (IMEI opcional)');
+r = await one(`select cardinality(unit_ids) n from public.order_items where order_id = $1`, [o2.id]);
+ok(r.n === 0, 'sem estoque da variação: continua sem aparelho (encomenda)');
 
 // edição com a trava de versão
 const fresh = await one(`select updated_at from public.orders where id = $1`, [o1.id]);
@@ -482,6 +500,31 @@ ok(its[1].mode === 'pronta' && Number(its[1].unit_price) === 5299 && its[2].mode
 r = await one(`select public.catalog_request($1::jsonb) r`, [JSON.stringify({ customer_name: 'Rui', items: [{ variant_id: v16.id, qty: 1, mode: 'pronta' }] })]);
 ok(r.r.items[0].mode === 'encomenda', 'pediu pronta entrega do que não tem estoque: vira encomenda');
 await as('authenticated', eder);
+
+console.log('13b. lista de PRONTA ENTREGA (a lista da loja vira o catálogo)');
+const p13 = await pid('iphone-13');
+await db.query(`update public.products set show_in_catalog = false where id = $1`, [p13]);
+const listaPronta = { mode: 'pronta', replace: false, items: [
+  { product_id: p13, storage: '128GB', color: 'Meia-noite', condition: 'Seminovo', price: 2147 },
+  { product_id: p13, storage: '256GB', color: 'Rosa', condition: 'Seminovo', price: 2297, qty: 2 },
+  { product_id: capa, storage: 'Silicone', color: 'Azul', condition: 'Lacrado', price: 99, qty: 5 },
+] };
+r = await one(`select public.import_order_list($1::jsonb) r`, [JSON.stringify(listaPronta)]);
+ok(r.r.created === 3 && r.r.units === 8, `3 variações criadas, 1 + 2 aparelhos sem IMEI + 5 capas (${JSON.stringify(r.r)})`);
+r = await one(`select show_in_catalog, active from public.products where id = $1`, [p13]);
+ok(r.show_in_catalog && r.active, 'modelo escondido volta a aparecer no catálogo');
+r = await all(`select storage, price::float p, stock from public.product_variants where product_id = $1 and condition = 'Seminovo' order by storage`, [p13]);
+ok(r.length === 2 && r[0].p === 2147 && r[0].stock === 1 && r[1].stock === 2, 'preço e estoque da lista gravados');
+r = await one(`select public.import_order_list($1::jsonb) r`, [JSON.stringify(listaPronta)]);
+ok(r.r.units === 0 && r.r.updated === 3, 'colar a mesma lista de novo não duplica estoque');
+await as('anon');
+r = await one(`select public.public_catalog() c`);
+const c13 = r.c.products.find((x) => x.name === 'iPhone 13');
+ok(c13 && c13.variants.filter((v) => v.available).length === 2, 'iPhone 13 aparece na hora como pronta entrega');
+await as('authenticated', eder);
+r = await one(`select public.import_order_list($1::jsonb) r`, [JSON.stringify({ ...listaPronta, replace: true, items: listaPronta.items.slice(0, 1) })]);
+r = await one(`select show_in_catalog, stock from public.product_variants where product_id = $1 and storage = '256GB' and condition = 'Seminovo'`, [p13]);
+ok(!r.show_in_catalog && r.stock === 2, 'substituir: o que saiu da lista sai do catálogo, mas o estoque fica');
 
 console.log('14. fiado: parcelas, aguardando pagamento e finalização automática');
 const cap2 = (await one(`insert into public.product_variants (product_id, storage, color, condition, price, cost, stock)

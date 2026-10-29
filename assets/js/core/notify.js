@@ -73,7 +73,7 @@ export async function check({ force = false } = {}) {
   const msg = dailyMessage();
   if (!msg) return false;
   write(LAST, today);
-  const opts = { body: msg.body, tag: 'i7even-cobrancas', icon: 'assets/brand/i7even-avatar-7.svg', data: { url: './#/receber' } };
+  const opts = { body: msg.body, tag: 'i7even-cobrancas', icon: 'assets/brand/i7even-avatar-i7.svg', data: { url: './#/receber' } };
   try {
     const reg = await registration();
     if (reg?.showNotification) { await reg.showNotification(msg.title, opts); return true; }

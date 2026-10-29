@@ -13,13 +13,13 @@
   "categories": ["business", "productivity"],
   "icons": [
     {
-      "src": "assets/brand/i7even-avatar-7.svg",
+      "src": "assets/brand/i7even-avatar-i7.svg",
       "sizes": "any",
       "type": "image/svg+xml",
       "purpose": "any"
     },
     {
-      "src": "assets/brand/i7even-avatar-7.svg",
+      "src": "assets/brand/i7even-avatar-i7.svg",
       "sizes": "any",
       "type": "image/svg+xml",
       "purpose": "maskable"

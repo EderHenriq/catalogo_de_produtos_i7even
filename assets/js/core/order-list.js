@@ -19,7 +19,17 @@
  *   - preço: "R$ 6.200,00", "6.200", "6200", "6,2k", "$ 650" / "650 usd"
  *     (US$); o último valor plausível da linha (≥ 50) é o preço;
  *   - condição: lacrado/novo, seminovo/semi/usado/swap, vitrine, cpo/
- *     recondicionado - na linha ou no título; sem nada, a condição padrão.
+ *     recondicionado - na linha ou no título; sem nada, a condição padrão;
+ *   - formato em BLOCOS (o mais comum nas listas da loja):
+ *         📲 iPhone 14 128GB      ← modelo + capacidade
+ *         💰 R$ 2.297,00          ← preço
+ *         ▫️ Vermelho             ← uma cor por linha (quantidade opcional: "(2)")
+ *         ▫️ Lilás
+ *     cada cor vira uma oferta com o preço do bloco. Cor que o cadastro não
+ *     tem ("Burgundy") entra como cor nova; sinônimos comuns ("preto" num
+ *     iPhone 13 = "Meia-noite", "vermelho" = "(PRODUCT)RED") são traduzidos;
+ *   - modelo que o cadastro não tem ("iPhone 17e") volta em `missing`, com
+ *     nome, capacidades, cores e preço - a tela oferece "Criar modelo".
  */
 
 export const CONDITION_WORDS = [
@@ -49,7 +59,8 @@ const OTHER_APPLE = /\b(ipad|macbook|mac\s*mini|imac|mac\s*studio|watch|airpods|
 
 /** Chave curta do modelo: "iphone 15 pro max" → "iphone|15|promax". */
 function iphoneKey(text) {
-  const t = ` ${norm(text)} `.replace(/i\s*phone/g, 'iphone').replace(/\bip\s*(?=\d)/g, 'iphone ');
+  const t = ` ${norm(text)} `.replace(/i\s*phone/g, 'iphone').replace(/iphone(?=\d)/g, 'iphone ')
+    .replace(/\bip\s*(?=\d)/g, 'iphone ');
   // "15pm", "15 promax", "15 pro max", "15 plus", "15+", "16e", "17 air"
   // Outro produto da Apple na linha ("iPad Air 11", "Watch Series 11"): o
   // número é dele, não de um iPhone - a não ser que a palavra iPhone apareça.
@@ -109,7 +120,7 @@ export function matchProduct(text, index) {
     // confundir "128" ou o preço com um número de modelo).
     if (p) return { product: p, at: ik.index, len: ik.length };
   }
-  const lineToks = new Set(tokens(text));
+  const lineToks = new Set(tokens(String(text).replace(/\bps\s*([45])\b/gi, 'playstation $1')));
   let best = null;
   for (const { p, toks } of index.others) {
     if (!toks.length) continue;
@@ -155,7 +166,12 @@ function matchSize(text, product) {
   if (!opts.length) return '';
   if (opts.length === 1) return opts[0];
   const t = norm(text).replace(/\s+mm\b/g, 'mm');
-  return opts.find((o) => t.includes(norm(o).replace(/\s+/g, ''))) || '';
+  const exact = opts.find((o) => t.includes(norm(o).replace(/\s+/g, '')));
+  if (exact) return exact;
+  // console: "digital" ou "com leitor" / "mídia física" / "disco" escolhem a versão
+  if (/\bdigital\b/.test(t)) return opts.find((o) => /digital/i.test(o)) || '';
+  if (/\b(leitor|disco|midia|fisic[ao]|standard)\b/.test(t)) return opts.find((o) => /com leitor/i.test(o)) || '';
+  return '';
 }
 
 /** Linha de outra marca (ou iPhone que o cadastro não tem): não herda o modelo do título. */
@@ -170,6 +186,26 @@ const COLOR_ALIAS = [
   [/\byellow\b/, 'amarelo'], [/\bred\b/, 'red'], [/\bdesert\b/, 'deserto'], [/\borange\b/, 'laranja'], [/\bgraphite\b/, 'grafite'],
 ];
 
+/*
+ * Sinônimos: usados só quando o modelo NÃO tem a cor com essa palavra.
+ * "preto" num iPhone 13 é "Meia-noite"; num 14 Pro, "Preto-espacial".
+ */
+const COLOR_SYNONYMS = [
+  ['preto', ['preto', 'meia noite', 'preto espacial', 'titanio preto', 'grafite']],
+  ['branco', ['branco', 'estelar', 'titanio branco', 'prateado']],
+  ['prateado', ['prateado', 'titanio branco']],
+  ['prata', ['prateado', 'titanio branco']],
+  ['vermelho', ['product red', 'red', 'vermelho']],
+  ['red', ['product red', 'red', 'vermelho']],
+  ['lilas', ['lilas', 'lavanda', 'roxo']],
+  ['lavanda', ['lavanda', 'lilas', 'roxo']],
+  ['verde', ['verde', 'salvia', 'verde acinzentado', 'verde alpino']],
+  ['azul', ['azul', 'azul nevoa', 'azul profundo', 'ultramarino', 'azul sierra', 'titanio azul']],
+  ['dourado', ['dourado', 'estelar']],
+  ['cinza', ['cinza espacial', 'grafite', 'cinza']],
+  ['roxo', ['roxo', 'roxo profundo', 'lavanda']],
+];
+
 function colorWords(c) {
   return norm(c).replace(/[()-]/g, ' ').split(/\s+/).filter((w) => w && !COLOR_FILLER.has(w));
 }
@@ -179,6 +215,13 @@ function matchColors(text, product) {
   let t = ` ${norm(text).replace(/-/g, ' ')} `;
   for (const [re, to] of COLOR_ALIAS) t = t.replace(re, to);
   const opts = [...(product?.colors || [])];
+  const optWords = opts.map((c) => ` ${colorWords(c).join(' ')} `);
+  for (const [word, alts] of COLOR_SYNONYMS) {
+    if (!new RegExp(`\\b${word}\\b`).test(t)) continue;
+    if (optWords.some((w) => w.includes(` ${word} `))) continue;   // o modelo tem a cor com essa palavra
+    const alt = alts.find((a) => optWords.some((w) => w.includes(` ${a} `)));
+    if (alt) t = t.replace(new RegExp(`\\b${word}\\b`), alt);
+  }
   const found = [];
   const ranked = opts.map((c) => ({ c, w: colorWords(c) })).filter((x) => x.w.length).sort((a, b) => b.w.length - a.w.length);
   let rest = t;
@@ -249,57 +292,159 @@ export function matchPrice(text, { skip = [] } = {}) {
 
 /* -------------------------------------------------------------- leitor -- */
 
+/** Quantidade na linha: "(2)", "2 un", "2un", "x2", "2x", "qtd 2". */
+export function matchQty(text) {
+  const t = norm(text);
+  const m = /\(\s*(\d{1,2})\s*(?:un\w*|pcs?|pecas?)?\s*\)|\bqtd\.?\s*:?\s*(\d{1,2})\b|\b(\d{1,2})\s*(?:un|und|unid\w*|pcs?|pecas?)\b|\bx\s*(\d{1,2})\b|\b(\d{1,2})\s*x\b(?!\s*de)/.exec(t);
+  if (!m) return null;
+  const q = Number(m[1] || m[2] || m[3] || m[4] || m[5]);
+  return q >= 1 && q <= 99 ? q : null;
+}
+
+/** Linha de cor solta ("▫️ Preto", "- Azul (2)"): curta, sem preço, sem número de modelo. */
+function looksLikeColorLine(line) {
+  const n = norm(line).replace(/^[-–•·>▫▪◽◾□■\s]+/, '').replace(/\(.*?\)|\b\d{1,2}\s*(un\w*|x)\b|\bx\s*\d{1,2}\b/g, ' ').replace(/\s+/g, ' ').trim();
+  return n.length >= 3 && n.length <= 28 && !/\d/.test(n) && n.split(' ').length <= 3 ? n : '';
+}
+
+/** Nome da cor como a pessoa escreveu ("burgundy" → "Burgundy"). */
+const titleCase = (s) => s.replace(/\b\p{L}/gu, (c) => c.toUpperCase());
+
+/** Linha de aviso da loja (horário, garantia, bateria...): nunca é produto. */
+const NOISE = /^(bom dia|boa tarde|boa noite|ola|oi|segue|lista|valores|precos|tabela|atualiz|cores?\b|disponiveis|estoque|garantia|pix|frete|envio|chama|chame|whats|segunda|terca|quarta|quinta|sexta|sabado|domingo|feriado|horario|consulte|enviamos|retirada|pronta entrega|parcel|cartao|aceitamos|\(?garantia|\(\d+ meses)/;
+const FAMILY = /\b(iphone|ipad|macbook|imac|watch|airpods|playstation|ps[45]|xbox|switch|nintendo|airtag|pencil|apple)\b/;
+
 /**
  * Lê a mensagem colada.
  * @param {string} text
  * @param {{products: object[], defaultCondition?: string}} opts
- * @returns {{ rows: object[], unknown: {line:string, reason:string}[] }}
+ * @returns {{ rows: object[], unknown: {line:string, reason:string}[], missing: object[] }}
+ *   rows:    { line, product, storage, color, newColor, size, condition, price, currency, qty, issues[] }
+ *   missing: { line, name, storage, colors[], price, currency, condition } - modelo fora do cadastro
  */
 export function parseOrderList(text, { products = [], defaultCondition = 'Lacrado' } = {}) {
   const index = buildIndex(products);
   const rows = [];
   const unknown = [];
+  const missing = [];
   let ctxProduct = null;
   let ctxCondition = null;
   let ctxStorage = null;
+  let block = null;   // { product?, missingName?, line, storage, price, currency, condition, colors: [{color, newColor, qty}], used }
+
+  const push = (b, color, newColor, qty, line, price, currency) => {
+    const p = b.product;
+    const issues = [];
+    if (!b.storage && p.storages?.length > 1) issues.push('capacidade');
+    if (!color && p.colors?.length > 1) issues.push('cor');
+    rows.push({ line, product: p, storage: b.storage || (p.storages?.length === 1 ? p.storages[0] : ''), color: color || (p.colors?.length === 1 ? p.colors[0] : ''),
+      newColor: !!newColor, size: b.size || '', condition: b.condition, price, currency, qty: qty || null, issues });
+  };
+
+  const flush = () => {
+    const b = block;
+    block = null;
+    if (!b) return;
+    if (b.missingName) {
+      if (b.price) missing.push({ line: b.line, name: b.missingName, storage: b.storage || '', colors: b.colors.map((c) => c.color).filter(Boolean),
+        price: b.price, currency: b.currency, condition: b.condition });
+      else unknown.push({ line: b.line, reason: 'Modelo não encontrado no cadastro' });
+      return;
+    }
+    if (!b.price) { if (!b.used && b.colors.length) unknown.push({ line: b.line, reason: 'Bloco sem preço' }); return; }
+    const line = [b.line, b.priceLine].filter(Boolean).join(' · ');
+    if (!b.colors.length) { push(b, '', false, null, line, b.price, b.currency); return; }
+    for (const c of b.colors) push(b, c.color, c.newColor, c.qty, `${line} · ${c.raw}`, b.price, b.currency);
+  };
 
   const lines = String(text || '').split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
   for (const line of lines) {
     const n = norm(line);
-    if (!n || /^[-=_.•·\s]+$/.test(n)) continue;
+    if (!n || /^[-=_.•·⸻—–\s]+$/.test(n) || /^[⸻—–-]+$/.test(line)) continue;
 
     // telefone/contato no rodapé não é preço
     if (/\(?\b\d{2}\)?\s?9\d{4}[-\s]?\d{4}\b/.test(line) && !matchProduct(line, index)) continue;
 
     const mp = matchProduct(line, index);
     const cond = matchCondition(line);
-    const storagePre = matchStorage(line, mp?.product || ctxProduct);
+    const storagePre = matchStorage(line, mp?.product || block?.product || ctxProduct);
     const price = matchPrice(line, { skip: [storagePre?.raw] });
 
+    // ---- linha de título de seção ("⬇️ IPHONES SEMINOVOS"): muda a condição
+    if (!price && !mp && cond && !/\d/.test(n)) {
+      flush();
+      ctxCondition = cond;
+      continue;
+    }
+
+    // ---- título de bloco: modelo (e capacidade) sem preço
+    if (!price && mp) {
+      flush();
+      ctxProduct = mp.product;
+      ctxStorage = matchStorage(line, mp.product)?.value || null;
+      block = { product: mp.product, line, storage: ctxStorage, size: matchSize(line, mp.product), price: 0, currency: 'BRL',
+        condition: cond || ctxCondition || defaultCondition, colors: [], used: false };
+      continue;
+    }
+    // ---- título com iPhone (ou outro aparelho) que o cadastro não tem
+    if (!price && !mp && FAMILY.test(n) && !NOISE.test(n)) {
+      flush();
+      ctxProduct = null; ctxStorage = null;
+      const st = /\b(\d)\s*tb\b|\b(64|128|256|512)\s*(gb|g)?\b/.exec(n);
+      const name = titleCase(line.replace(/[\u{1F000}-\u{1FFFF}\u{2600}-\u{27BF}\u{FE0F}\u{200D}*_~]/gu, ' ')
+        .replace(/\b\d+\s*(gb|tb|g)\b/gi, ' ').replace(/\b(64|128|256|512)\b/g, ' ').replace(/\s+/g, ' ').trim().toLowerCase())
+        .replace(/\biphone\b/i, 'iPhone').replace(/(\d)e\b/i, '$1e');
+      block = { missingName: name, line, storage: st ? (st[1] ? `${st[1]}TB` : `${st[2]}GB`) : '', price: 0, currency: 'BRL',
+        condition: cond || ctxCondition || defaultCondition, colors: [], used: false };
+      continue;
+    }
+
+    // ---- preço sozinho, logo depois do título do bloco
+    if (price && !mp && block && !block.price && !matchColors(line, block.product).length && !looksLikeColorLine(line.replace(/r?\$?\s*[\d.,]+\s*k?/gi, ''))) {
+      block.price = price.value; block.currency = price.currency; block.priceLine = line;
+      continue;
+    }
+
+    // ---- cor solta embaixo do preço do bloco
+    if (!price && block) {
+      const raw = looksLikeColorLine(line);
+      if (raw) {
+        const qty = matchQty(line);
+        if (block.missingName) { block.colors.push({ color: titleCase(raw), raw, qty }); continue; }
+        const found = matchColors(line, block.product);
+        if (found.length) for (const c of found) block.colors.push({ color: c, raw, qty, newColor: false });
+        else block.colors.push({ color: titleCase(raw), raw, qty, newColor: true });
+        continue;
+      }
+    }
+
     if (!price) {
-      // título: muda o contexto das linhas de baixo
-      if (mp) { ctxProduct = mp.product; ctxStorage = matchStorage(line, mp.product)?.value || null; }
-      if (cond) ctxCondition = cond;
+      // título antigo: capacidade solta para o modelo de cima
       if (!mp && !cond) {
         const st = matchStorage(line, ctxProduct);
-        if (st && ctxProduct) ctxStorage = st.value;
-        else if (!/^(bom dia|boa tarde|boa noite|ola|oi|segue|lista|valores|precos|tabela|atualiz|cores?\b|disponiveis|estoque|garantia|pix|frete|envio|chama|chame|whats)/.test(n)) {
-          // linha sem preço e sem modelo: anúncio/saudação - só registra se parece produto
-          if (/\d/.test(n) && n.length > 3) unknown.push({ line, reason: 'Sem preço e sem modelo reconhecido' });
-        }
+        if (st && ctxProduct && !block) ctxStorage = st.value;
+        else if (!NOISE.test(n) && FAMILY.test(n)) unknown.push({ line, reason: 'Sem preço e sem modelo reconhecido' });
       }
       continue;
     }
 
+    // ---- linha completa (modelo/cor e preço na mesma linha)
     if (!mp && (OTHER_BRAND.test(n) || /\biphone\b/.test(n))) {
+      flush();
       unknown.push({ line, reason: OTHER_BRAND.test(n) ? 'Outra marca (não está no cadastro)' : 'Modelo de iPhone não encontrado no cadastro' });
       continue;
     }
-    const product = mp?.product || ctxProduct;
-    if (mp) ctxProduct = mp.product;
+    // Linha de outro aparelho (PS5, Watch...) que não achou o modelo: não herda o de cima.
+    if (!mp && FAMILY.test(n) && ctxProduct && !FAMILY.test(norm(ctxProduct.name).replace(/\biphone\b/, n.includes('iphone') ? 'iphone' : ''))) {
+      unknown.push({ line, reason: 'Modelo não encontrado no cadastro' });
+      continue;
+    }
+    if (mp) { flush(); ctxProduct = mp.product; }
+    const product = mp?.product || block?.product || ctxProduct;
     if (!product) { unknown.push({ line, reason: 'Modelo não reconhecido' }); continue; }
+    if (block && !mp) block.used = true;
 
-    const storage = matchStorage(line, product)?.value || (mp ? null : ctxStorage) || (product.storages?.length === 1 ? product.storages[0] : '');
+    const storage = matchStorage(line, product)?.value || (mp ? null : (block?.storage || ctxStorage)) || (product.storages?.length === 1 ? product.storages[0] : '');
     let colors = matchColors(line, product);
     const issues = [];
     if (!storage && product.storages?.length > 1) issues.push('capacidade');
@@ -307,22 +452,15 @@ export function parseOrderList(text, { products = [], defaultCondition = 'Lacrad
       if (product.colors?.length === 1) colors = [product.colors[0]];
       else { colors = ['']; if (product.colors?.length) issues.push('cor'); }
     }
-    const condition = cond || ctxCondition || defaultCondition;
+    const condition = cond || block?.condition || ctxCondition || defaultCondition;
+    const qty = matchQty(line);
     for (const color of colors) {
-      rows.push({
-        line,
-        product,
-        storage: storage || '',
-        color,
-        size: matchSize(line, product),
-        condition,
-        price: price.value,
-        currency: price.currency,
-        issues: [...issues],
-      });
+      rows.push({ line, product, storage: storage || '', color, newColor: false, size: matchSize(line, product), condition,
+        price: price.value, currency: price.currency, qty, issues: [...issues] });
     }
   }
-  return { rows, unknown };
+  flush();
+  return { rows, unknown, missing };
 }
 
 /* --------------------------------------------------------- preço final -- */

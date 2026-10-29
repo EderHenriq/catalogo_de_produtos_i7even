@@ -36,6 +36,14 @@ de pausar.
    sozinho todo dia às 06:23. Sem os secrets, ele só faz o "sinal de vida"
    (que já impede a pausa) e pula o backup.
 
+**Atualização v2.1 (rode de novo `schema.sql` e depois `seed_catalogo.sql`):**
+IMEI e bateria opcionais (a venda separa o aparelho do estoque sozinha);
+lista do WhatsApp em **pronta entrega** (publica com preço e estoque) ou
+encomenda, com cores em linhas separadas, cor nova e "Criar modelo";
+**cadastro rápido** (Produtos → + Produto); **fotos por cor** no modelo;
+PS5 com **versão** (com leitor / digital) separada do armazenamento;
+catálogo com as abas Pronta entrega × Sob encomenda e a logo "i7".
+
 **Restaurar um backup:** baixe o artefato em *Actions*, abra com
 `gpg -d i7even-AAAA-MM-DD_HHMM.tar.gz.gpg > b.tar.gz` (pede a passphrase),
 `tar -xzf b.tar.gz`, e no SQL Editor rode: `schema.sql` → `2_login.sql` → `1_dados.sql`.

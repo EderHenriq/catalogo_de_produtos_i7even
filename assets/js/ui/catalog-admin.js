@@ -35,14 +35,17 @@ export function mount(host, ctx) {
   function stats() {
     const prods = Data.products().filter((p) => p.active && p.showInCatalog
       && (!p.categoryId || Data.category(p.categoryId)?.active));
-    const shown = prods.filter((p) => Data.variantsOf(p.id).some((v) => v.active && v.showInCatalog && v.price > 0));
+    // à mostra = tem variação com preço de pronta entrega OU oferta de encomenda
+    const sells = (v) => v.active && v.showInCatalog && (v.price > 0 || (v.onOrder && v.orderPrice > 0));
+    const shown = prods.filter((p) => Data.variantsOf(p.id).some(sells));
     const since = Date.now() - 30 * 86400000;
     const reqs = Data.catalogRequests().filter((r) => Date.parse(r.createdAt) >= since);
     return {
       shown: shown.length,
-      noPhoto: shown.filter((p) => !p.imageUrl).length,
+      noPhoto: shown.filter((p) => !p.imageUrl && !Object.keys(p.colorPhotos || {}).length).length,
       inStock: shown.filter((p) => Data.productStock(p.id) > 0).length,
-      noVariant: prods.filter((p) => !Data.variantsOf(p.id).some((v) => v.active && v.showInCatalog && v.price > 0)).length,
+      // modelo COM variação mas nenhuma vendável (os do cadastro base sem variação não contam)
+      noVariant: prods.filter((p) => Data.variantsOf(p.id).some((v) => v.active) && !Data.variantsOf(p.id).some(sells)).length,
       reqs: reqs.length,
       converted: reqs.filter((r) => r.status === 'convertido').length,
     };
@@ -211,7 +214,7 @@ export function mount(host, ctx) {
     if (!s.catalogEnabled) out.push({ fix: 'open', icon: 'store', text: 'O catálogo está fechado - abra para os clientes verem os produtos.' });
     if (!waNumber(s.phone)) out.push({ fix: 'phone', icon: 'whatsapp', text: 'Falta o WhatsApp da loja (Ajustes → Dados da loja): é para onde os pedidos vão.' });
     if (st.noPhoto) out.push({ fix: 'photos', icon: 'camera', text: `${st.noPhoto} ${st.noPhoto === 1 ? 'modelo à mostra está' : 'modelos à mostra estão'} sem foto.` });
-    if (st.noVariant) out.push({ fix: 'prices', icon: 'tag', text: `${st.noVariant} ${st.noVariant === 1 ? 'modelo marcado não aparece' : 'modelos marcados não aparecem'}: sem variação com preço.` });
+    if (st.noVariant) out.push({ fix: 'prices', icon: 'tag', text: `${st.noVariant} ${st.noVariant === 1 ? 'modelo tem variação, mas nenhuma com preço' : 'modelos têm variação, mas nenhuma com preço'} - não aparecem no catálogo.` });
     if (!st.shown) out.push({ fix: 'prices', icon: 'box', text: 'Nenhum produto à mostra ainda: cadastre as variações com preço em Produtos.' });
     return out;
   }
@@ -264,12 +267,12 @@ export function mount(host, ctx) {
           <div class="grow" style="min-width:220px"><div class="strong">Catálogo de encomenda</div>
             <div class="small dim">Cole a lista que o fornecedor manda no WhatsApp: os modelos e valores são reconhecidos, você ajusta o preço de venda e publica.
               No catálogo aparecem com o selo "Sob encomenda" e o prazo.</div></div>
-          <button class="btn btn-primary" data-paste-list>${icon('copy')} Colar lista do fornecedor</button>
+          <button class="btn btn-primary" data-paste-list>${icon('copy')} Colar lista do WhatsApp</button>
         </div>
       </div>`;
     if (!offers.length) {
       return head + `<div class="card">${emptyState({ emoji: '📦', title: 'Nenhuma oferta de encomenda',
-        text: 'Toque em "Colar lista do fornecedor". Também dá para ligar a encomenda numa variação em Produtos.' })}</div>`;
+        text: 'Toque em "Colar lista do WhatsApp". Também dá para ligar a encomenda numa variação em Produtos.' })}</div>`;
     }
     const groups = new Map();
     for (const v of offers) {
@@ -322,8 +325,8 @@ export function mount(host, ctx) {
       </div>
       <div class="card mobile-list">
         ${list.map((p) => {
-          const vs = Data.variantsOf(p.id).filter((v) => v.active && v.showInCatalog && v.price > 0);
-          const why = !vs.length ? 'sem variação com preço' : !p.imageUrl ? 'sem foto' : '';
+          const vs = Data.variantsOf(p.id).filter((v) => v.active && v.showInCatalog && (v.price > 0 || (v.onOrder && v.orderPrice > 0)));
+          const why = !vs.length ? 'sem variação com preço' : !p.imageUrl && !Object.keys(p.colorPhotos || {}).length ? 'sem foto' : '';
           return `
             <div class="m-row">
               ${productThumb(p, 'sm')}
@@ -388,7 +391,7 @@ export function mount(host, ctx) {
       if (k === 'photos') { try { localStorage.setItem('i7even.pref.products.filter', '"semfoto"'); } catch { /* */ } ctx.go?.('produtos'); return; }
       if (k === 'prices') { ctx.go?.('produtos'); return; }
     }
-    if (t.closest('[data-paste-list]')) { openOrderListImport({ onDone: () => { tab = 'encomenda'; render(); } }); return; }
+    if (t.closest('[data-paste-list]')) { openOrderListImport({ mode: 'encomenda', onDone: () => { tab = 'encomenda'; render(); } }); return; }
     const off = t.closest('[data-offer-off]');
     if (off) {
       try { await Data.clearOrderOffers([off.dataset.offerOff]); toast('Saiu da encomenda'); } catch (err) { toastError('Não foi possível', friendlyError(err)); }

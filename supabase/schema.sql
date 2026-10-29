@@ -311,6 +311,8 @@ create table if not exists public.products (
 
 -- Fotos extras do modelo (a capa é image_url): viram carrossel no catálogo.
 alter table public.products add column if not exists gallery text[] not null default '{}';
+-- Foto de cada cor do modelo {"Preto": url, ...}: vale para toda variação dessa cor (pronta entrega e encomenda)
+alter table public.products add column if not exists color_photos jsonb not null default '{}'::jsonb;
 alter table public.products drop constraint if exists products_gallery_check;
 alter table public.products add constraint products_gallery_check check (cardinality(gallery) <= 8);
 
@@ -354,6 +356,8 @@ alter table public.product_variants add column if not exists order_cost numeric(
 alter table public.product_variants add column if not exists order_lead text;
 alter table public.product_variants add column if not exists order_supplier text;
 alter table public.product_variants add column if not exists order_updated_at timestamptz;
+-- quantas o fornecedor tem (quando a lista diz): limita a quantidade no catálogo
+alter table public.product_variants add column if not exists order_qty int check (order_qty is null or order_qty between 1 and 999);
 alter table public.product_variants drop constraint if exists product_variants_order_check;
 alter table public.product_variants add constraint product_variants_order_check check (
   (order_price is null or order_price >= 0) and (order_cost is null or order_cost >= 0)
@@ -995,6 +999,28 @@ begin
     end if;
   end loop;
 
+  -- 1b. aparelho sem a unidade escolhida (IMEI é opcional): se tem no
+  --     estoque, separa o mais antigo desta variação; se não tem, segue como
+  --     encomenda até chegar.
+  for r in
+    select oi.id, oi.variant_id, oi.qty, cardinality(oi.unit_ids) as chosen
+      from public.order_items oi
+      join public.product_variants v on v.id = oi.variant_id
+      join public.products p on p.id = v.product_id and p.tracks_serial
+     where oi.order_id = p_order and cardinality(oi.unit_ids) < oi.qty
+     order by oi.position
+  loop
+    update public.order_items set unit_ids = unit_ids || coalesce((
+      select array_agg(un.id order by un.created_at, un.id)
+        from (select u2.id, u2.created_at from public.units u2
+               where u2.variant_id = r.variant_id and u2.status = 'estoque'
+                 and not exists (select 1 from public.order_items o3 where o3.order_id = p_order and u2.id = any(o3.unit_ids))
+               order by u2.created_at, u2.id
+               limit r.qty - r.chosen
+               for update) un), '{}')
+     where id = r.id;
+  end loop;
+
   -- 2. aparelhos: a unidade escolhida tem que estar no estoque
   for u in
     select un.id, un.serial, un.status, un.variant_id, oi.variant_id as item_variant, o2.code as sold_in
@@ -1059,7 +1085,7 @@ $$;
 
 revoke all on function public._order_apply_stock(uuid) from public, anon, authenticated;
 
-/* Status que exigem o IMEI escolhido em todo aparelho do pedido. */
+/* (v2.1) IMEI opcional: não bloqueia mais nenhum status. */
 create or replace function public._order_check_serials(p_order uuid, p_status text)
 returns void
 language plpgsql
@@ -1069,16 +1095,10 @@ as $$
 declare
   v_list text;
 begin
-  if p_status not in ('enviado', 'entregue') then return; end if;
-  select string_agg(format('• %s (%s de %s)', oi.product_name, cardinality(oi.unit_ids), oi.qty), E'\n' order by oi.position)
-    into v_list
-    from public.order_items oi
-    join public.products p on p.id = oi.product_id and p.tracks_serial
-   where oi.order_id = p_order and oi.variant_id is not null and cardinality(oi.unit_ids) < oi.qty;
-  if v_list is not null then
-    raise exception E'Escolha o IMEI dos aparelhos antes de marcar como %:\n%',
-      case p_status when 'enviado' then 'Em entrega' else 'Finalizado' end, v_list;
-  end if;
+  -- Desde a v2.1 o IMEI é opcional: a venda separa o aparelho do estoque
+  -- sozinha (_order_apply_stock). Fica a função para não quebrar quem chama.
+  v_list := null;
+  return;
 end;
 $$;
 
@@ -1686,18 +1706,16 @@ begin
     v_price := nullif(greatest(coalesce((v_item ->> 'sale_price')::numeric, 0), 0), 0);
 
     if v_prod.tracks_serial then
+      -- IMEI opcional: sem a lista de aparelhos, entra a quantidade sem IMEI
       if jsonb_typeof(v_item -> 'units') is distinct from 'array' or jsonb_array_length(v_item -> 'units') = 0 then
-        raise exception '"%" é controlado por IMEI: informe o IMEI de cada aparelho (linha %).',
-          concat_ws(' · ', v_prod.name, nullif(public.variant_label(v_var), '')), v_pos;
+        v_item := jsonb_set(v_item, '{units}', coalesce((select jsonb_agg('{}'::jsonb)
+          from generate_series(1, least(greatest(coalesce((v_item ->> 'qty')::int, 1), 1), 999))), '[]'::jsonb));
       end if;
       v_qty := jsonb_array_length(v_item -> 'units');
       v_serials := '{}';
       for v_unit in select * from jsonb_array_elements(v_item -> 'units') loop
         v_serial := nullif(left(btrim(coalesce(v_unit ->> 'serial', '')), 40), '');
-        if v_serial is null then
-          raise exception 'Falta o IMEI de um aparelho de "%" (linha %).', v_prod.name, v_pos;
-        end if;
-        if exists (select 1 from public.units where upper(btrim(serial)) = upper(v_serial) and status = 'estoque') then
+        if v_serial is not null and exists (select 1 from public.units where upper(btrim(serial)) = upper(v_serial) and status = 'estoque') then
           raise exception 'O IMEI % já está no estoque.', v_serial;
         end if;
         v_line  := coalesce(nullif(v_unit ->> 'cost', '')::numeric, v_input) * v_rate;
@@ -1712,7 +1730,7 @@ begin
         returning id into v_uid;
         insert into public.stock_movements (variant_id, kind, qty, unit_cost, unit_id, purchase_id, note, prev_cost)
         values (v_vid, 'entrada', 1, round(v_line + v_share, 4), v_uid, v_id, format('Entrada #%s', v_number), v_var.cost);
-        v_serials := v_serials || v_serial;
+        if v_serial is not null then v_serials := v_serials || v_serial; end if;
       end loop;
       perform public._variant_sync(v_vid);
       select cost into v_newcost from public.product_variants where id = v_vid;
@@ -1900,8 +1918,7 @@ begin
 
   for v_unit in select * from jsonb_array_elements(p_units) loop
     v_serial := nullif(left(btrim(coalesce(v_unit ->> 'serial', '')), 40), '');
-    if v_serial is null then raise exception 'Informe o IMEI / número de série de cada aparelho.'; end if;
-    if exists (select 1 from public.units where upper(btrim(serial)) = upper(v_serial) and status = 'estoque') then
+    if v_serial is not null and exists (select 1 from public.units where upper(btrim(serial)) = upper(v_serial) and status = 'estoque') then
       raise exception 'O IMEI % já está no estoque.', v_serial;
     end if;
     insert into public.units (variant_id, serial, cost, origin, battery_health, notes)
@@ -2267,7 +2284,7 @@ begin
     select * from base where ready or enc_price is not null
   ),
   prods as (
-    select p.id, p.code, p.name, p.brand, p.year, p.description, p.image_url, p.gallery, p.category_id, p.featured,
+    select p.id, p.code, p.name, p.brand, p.year, p.description, p.image_url, p.gallery, p.color_photos, p.category_id, p.featured,
            p.storages, p.colors, p.sizes,
            jsonb_agg(jsonb_build_object(
              'id', vis.id,
@@ -2279,6 +2296,7 @@ begin
              'ready_price', case when vis.ready then vis.price end,
              'order_price', vis.enc_price,
              'order_lead', case when vis.enc_price is not null then nullif(vis.order_lead, '') end,
+             'order_qty', case when vis.enc_price is not null and vis.on_order then vis.order_qty end,
              'image', vis.image_url,
              'available', vis.ready,
              'on_order', vis.enc_price is not null,
@@ -2294,7 +2312,7 @@ begin
   )
   select coalesce(jsonb_agg(jsonb_build_object(
            'id', x.id, 'code', x.code, 'name', x.name, 'brand', x.brand, 'year', x.year,
-           'description', x.description, 'image', x.image_url, 'gallery', to_jsonb(x.gallery), 'category_id', x.category_id,
+           'description', x.description, 'image', x.image_url, 'gallery', to_jsonb(x.gallery), 'color_photos', x.color_photos, 'category_id', x.category_id,
            'featured', x.featured, 'storages', to_jsonb(x.storages), 'colors', to_jsonb(x.colors),
            'sizes', to_jsonb(x.sizes), 'variants', x.variants,
            'min_price', x.min_price, 'available', x.available, 'on_order', x.on_order
@@ -2459,14 +2477,21 @@ revoke all on function public.catalog_request(jsonb) from public;
 grant execute on function public.catalog_request(jsonb) to anon, authenticated;
 
 /*
- * Lista de encomenda do fornecedor (colada do WhatsApp e conferida na tela):
- * publica tudo numa transação só.
- *   p = { supplier, lead, replace,
- *         items: [{ product_id, storage, color, size, condition, cost, price }] }
- * Cada item acha (ou cria) a variação e liga a oferta de encomenda com o
- * preço de venda e o custo do fornecedor. `replace`: o que estava na lista
- * anterior DESTE fornecedor e não veio agora sai da encomenda.
- * Devolve { created, updated, removed }.
+ * Lista colada do WhatsApp (conferida na tela) → catálogo, numa transação só.
+ *   p = { mode: 'pronta' | 'encomenda', supplier, lead, replace,
+ *         items: [{ product_id, storage, color, size, condition, cost, price, qty }] }
+ *
+ * PRONTA ENTREGA (a lista da própria loja: o que tem para vender agora)
+ *   cada item acha (ou cria) a variação, grava o preço de venda e garante o
+ *   estoque da lista (qty, 1 se não veio): modelo com IMEI ganha aparelhos
+ *   SEM IMEI até completar (o IMEI é opcional); por quantidade, o saldo sobe
+ *   até a qty. Nunca TIRA estoque. `replace`: o que estava à venda e não veio
+ *   na lista sai do catálogo (fica cadastrado, com o estoque).
+ * SOB ENCOMENDA (lista do fornecedor)
+ *   liga a oferta de encomenda com o preço de venda e o custo do fornecedor;
+ *   `replace`: o que estava na lista anterior DESTE fornecedor sai.
+ * Os dois modos deixam o MODELO ativo e à mostra (a lista é o catálogo).
+ * Devolve { created, updated, removed, units }.
  */
 create or replace function public.import_order_list(p jsonb)
 returns jsonb
@@ -2475,6 +2500,7 @@ security definer
 set search_path = public
 as $$
 declare
+  v_mode     text := case when p ->> 'mode' = 'pronta' then 'pronta' else 'encomenda' end;
   v_supplier text := nullif(left(btrim(coalesce(p ->> 'supplier', '')), 120), '');
   v_lead     text := nullif(left(btrim(coalesce(p ->> 'lead', '')), 40), '');
   v_it       jsonb;
@@ -2485,7 +2511,13 @@ declare
   v_created  int := 0;
   v_updated  int := 0;
   v_removed  int := 0;
+  v_units    int := 0;
   v_price    numeric;
+  v_cost     numeric;
+  v_qty      int;
+  v_have     int;
+  v_serial   boolean;
+  v_uid      uuid;
 begin
   perform public.require_member();
   if jsonb_typeof(p -> 'items') is distinct from 'array' or jsonb_array_length(p -> 'items') = 0 then
@@ -2504,6 +2536,8 @@ begin
     if v_price <= 0 then
       raise exception 'Todo item precisa de valor de venda maior que zero (%).', coalesce(v_it ->> 'storage', '');
     end if;
+    v_cost := greatest(round(coalesce((v_it ->> 'cost')::numeric, 0), 4), 0);
+    v_qty := least(greatest(coalesce(nullif(v_it ->> 'qty', '')::int, 1), 1), 99);
     v_existed := exists (
       select 1 from public.product_variants
        where product_id = v_pid
@@ -2511,31 +2545,65 @@ begin
          and lower(btrim(color)) = lower(btrim(coalesce(v_it ->> 'color', '')))
          and lower(btrim(size)) = lower(btrim(coalesce(v_it ->> 'size', '')))
          and lower(btrim(condition)) = lower(coalesce(nullif(btrim(v_it ->> 'condition'), ''), 'Lacrado')));
-    -- variação nova nasce com preço de pronta entrega 0 (sem estoque) e só a oferta de encomenda
     v_vid := public._variant_find_or_create(v_pid, v_it ->> 'storage', v_it ->> 'color', v_it ->> 'size',
-                                            v_it ->> 'condition', 0);
-    update public.product_variants set
-      on_order = true,
-      order_price = v_price,
-      order_cost = greatest(round(coalesce((v_it ->> 'cost')::numeric, 0), 4), 0),
-      order_lead = coalesce(v_lead, order_lead),
-      order_supplier = coalesce(v_supplier, order_supplier),
-      order_updated_at = now(),
-      active = true,
-      show_in_catalog = true
-    where id = v_vid;
+                                            v_it ->> 'condition', case when v_mode = 'pronta' then v_price else 0 end);
+    -- a lista é o catálogo: o modelo fica ativo e à mostra
+    update public.products set active = true, show_in_catalog = true where id = v_pid and not (active and show_in_catalog);
+
+    if v_mode = 'pronta' then
+      update public.product_variants set price = v_price, active = true, show_in_catalog = true where id = v_vid;
+      select tracks_serial into v_serial from public.products where id = v_pid;
+      if v_serial then
+        select count(*)::int into v_have from public.units where variant_id = v_vid and status = 'estoque';
+        for i in 1 .. greatest(v_qty - v_have, 0) loop
+          insert into public.units (variant_id, cost, notes) values (v_vid, v_cost, 'Lista de pronta entrega')
+          returning id into v_uid;
+          insert into public.stock_movements (variant_id, kind, qty, unit_cost, unit_id, note)
+          values (v_vid, 'inicial', 1, v_cost, v_uid, 'Lista de pronta entrega (sem IMEI)');
+          v_units := v_units + 1;
+        end loop;
+        perform public._variant_sync(v_vid);
+      else
+        select stock into v_have from public.product_variants where id = v_vid for update;
+        if v_have < v_qty then
+          update public.product_variants set stock = v_qty,
+                 cost = case when coalesce(cost, 0) = 0 and v_cost > 0 then v_cost else cost end
+           where id = v_vid;
+          insert into public.stock_movements (variant_id, kind, qty, unit_cost, note)
+          values (v_vid, 'ajuste', v_qty - v_have, v_cost, 'Lista de pronta entrega');
+          v_units := v_units + (v_qty - v_have);
+        end if;
+      end if;
+    else
+      update public.product_variants set
+        on_order = true,
+        order_price = v_price,
+        order_cost = v_cost,
+        order_qty = nullif(v_it ->> 'qty', '')::int,
+        order_lead = coalesce(v_lead, order_lead),
+        order_supplier = coalesce(v_supplier, order_supplier),
+        order_updated_at = now(),
+        active = true,
+        show_in_catalog = true
+      where id = v_vid;
+    end if;
     v_ids := v_ids || v_vid;
     if v_existed then v_updated := v_updated + 1; else v_created := v_created + 1; end if;
   end loop;
 
   if coalesce((p ->> 'replace')::boolean, false) then
-    update public.product_variants set on_order = false, order_updated_at = now()
-     where on_order and not (id = any(v_ids))
-       and coalesce(order_supplier, '') = coalesce(v_supplier, '');
+    if v_mode = 'pronta' then
+      update public.product_variants set show_in_catalog = false
+       where show_in_catalog and active and stock > 0 and price > 0 and not (id = any(v_ids));
+    else
+      update public.product_variants set on_order = false, order_updated_at = now()
+       where on_order and not (id = any(v_ids))
+         and coalesce(order_supplier, '') = coalesce(v_supplier, '');
+    end if;
     get diagnostics v_removed = row_count;
   end if;
 
-  return jsonb_build_object('created', v_created, 'updated', v_updated, 'removed', v_removed);
+  return jsonb_build_object('created', v_created, 'updated', v_updated, 'removed', v_removed, 'units', v_units);
 end;
 $$;
 
@@ -2733,11 +2801,11 @@ grant select, update, delete on public.catalog_requests to authenticated;
 -- modelos e variações: cadastra; o saldo só muda por entrada/venda/ajuste;
 -- excluir só pelas funções (conferem o histórico)
 grant select, insert on public.products, public.product_variants to authenticated;
-grant update (category_id, name, brand, year, description, image_url, gallery, storages, colors, sizes, tracks_serial,
+grant update (category_id, name, brand, year, description, image_url, gallery, color_photos, storages, colors, sizes, tracks_serial,
               show_in_catalog, featured, needs_review, notes, active)
   on public.products to authenticated;
 grant update (storage, color, size, condition, price, cost, min_stock, barcode, image_url, show_in_catalog, active,
-              on_order, order_price, order_cost, order_lead, order_supplier, order_updated_at)
+              on_order, order_price, order_cost, order_qty, order_lead, order_supplier, order_updated_at)
   on public.product_variants to authenticated;
 
 -- parcelas do fiado: nascem e mudam pelo save_order; a tela só marca "cobrei hoje"

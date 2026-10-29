@@ -12,10 +12,11 @@
  */
 
 import * as Data from '../core/data.js';
+import { openQuickProduct } from './quick-product.js';
 import { marginPct, variantLabel, round2 } from '../core/calc.js';
 import { CONDITIONS, ORIGINS, MOVEMENT_KIND, ADJUST_REASONS, DISCARD_REASONS, UNIT_STATUS } from '../core/constants.js';
 import { friendlyError, isInUse } from '../core/errors.js';
-import { esc, money, parseMoney, moneyInputValue, formatDate, formatDateTime, toCSV, downloadFile, todayISO } from '../core/utils.js';
+import { esc, money, parseMoney, moneyInputValue, formatDate, formatDateTime, toCSV, downloadFile, todayISO, thumbUrl } from '../core/utils.js';
 import { openModal, confirmDialog, toast, toastError, withLoading, emptyState, openMenu } from './kit.js';
 import { icon } from './icons.js';
 import {
@@ -56,9 +57,9 @@ export function mount(host, ctx) {
         </div>
         <div class="row gap-2 wrap">
           <button class="btn" data-export>${icon('download')}<span class="hide-mobile">Exportar</span></button>
-          <button class="btn" data-olist title="Colar a lista do fornecedor (sob encomenda)">${icon('copy')}<span class="hide-mobile">Lista do fornecedor</span></button>
-          <button class="btn" data-entry>${icon('truck')}<span>Entrada</span></button>
-          <button class="btn btn-primary" data-new-product>${icon('plus')} Modelo</button>
+          <button class="btn" data-olist title="Colar a lista do WhatsApp (pronta entrega ou encomenda)">${icon('copy')}<span class="hide-mobile">Lista do WhatsApp</span></button>
+          <button class="btn" data-entry title="Entrada de mercadoria">${icon('truck')}<span class="hide-mobile">Entrada</span></button>
+          <button class="btn btn-primary" data-new-product>${icon('plus')} Produto</button>
         </div>
       </div>
 
@@ -95,7 +96,7 @@ export function mount(host, ctx) {
       case 'baixo': return p.active && vs.some((v) => v.minStock > 0 && v.stock <= v.minStock);
       case 'sempreco': return p.active && vs.some((v) => v.active && !(v.price > 0) && !v.onOrder);
       case 'encomenda': return p.active && vs.some((v) => v.onOrder && v.orderPrice > 0);
-      case 'semfoto': return p.active && !p.imageUrl;
+      case 'semfoto': return p.active && !p.imageUrl && !Object.keys(p.colorPhotos || {}).length;
       case 'revisar': return p.active && p.needsReview;
       default: return p.active;
     }
@@ -242,7 +243,7 @@ export function mount(host, ctx) {
 
   host.addEventListener('click', (e) => {
     const t = e.target;
-    if (t.closest('[data-new-product]')) { openProductForm({ categoryId: st.cat || null }); return; }
+    if (t.closest('[data-new-product]')) { openQuickProduct({ categoryId: st.cat || null, onDone: render }); return; }
     if (t.closest('[data-olist]')) {
       import('./order-list-import.js').then((m) => m.openOrderListImport({ onDone: () => { host.querySelector('[data-filter="encomenda"]')?.click(); } }));
       return;
@@ -302,8 +303,9 @@ export function openProductSheet(productId) {
     footer: `
       <button class="icon-btn" data-more aria-label="Mais ações">${icon('more')}</button>
       <span class="grow"></span>
-      <button class="btn" data-edit>${icon('edit')}<span>Editar modelo</span></button>
-      <button class="btn btn-primary" data-add-variants>${icon('plus')}<span>Variações</span></button>`,
+      <button class="btn" data-edit>${icon('edit')}<span class="hide-mobile">Editar modelo</span></button>
+      <button class="btn" data-add-variants>${icon('layers')}<span class="hide-mobile">Variações</span></button>
+      <button class="btn btn-primary" data-quick>${icon('store')}<span>Pôr à venda</span></button>`,
   });
   const $sheet = modal.body.querySelector('[data-sheet]');
   let editingPrices = false;
@@ -366,7 +368,9 @@ export function openProductSheet(productId) {
 
   /** Uma foto por cor (fundo branco, como vitrine): vale para todas as variações da cor, até as de encomenda. */
   function colorPhotosHTML(active) {
-    const colors = [...new Set(active.map((v) => v.color).filter(Boolean))]
+    // as cores do modelo (mesmo sem estoque ainda) + as das variações
+    const colors = [...new Set([...p.colors, ...active.map((v) => v.color)].filter(Boolean))]
+      .filter((c) => !/^outra cor$/i.test(c))
       .sort((a, b) => (p.colors.indexOf(a) + 1 || 999) - (p.colors.indexOf(b) + 1 || 999));
     if (!colors.length) return '';
     return `
@@ -374,9 +378,9 @@ export function openProductSheet(productId) {
         <div class="fieldset-title">Fotos por cor <span class="dim small" style="font-weight:400;text-transform:none;letter-spacing:0">o cliente vê a foto da cor que escolher</span></div>
         <div class="color-photos">
           ${colors.map((c) => {
-            const withImg = active.find((v) => v.color === c && v.imageUrl);
-            return `<button type="button" class="color-photo" data-color-photo="${esc(c)}" aria-label="Foto da cor ${esc(c)}">
-              <span class="color-photo-img">${withImg ? productThumb(p, 'md', withImg) : icon('camera')}</span>
+            const photo = p.colorPhotos?.[c] || active.find((v) => v.color === c && v.imageUrl)?.imageUrl;
+            return `<button type="button" class="color-photo${photo ? ' has-photo' : ''}" data-color-photo="${esc(c)}" aria-label="Foto da cor ${esc(c)}">
+              <span class="color-photo-img">${photo ? `<span class="thumb thumb-md"><img src="${esc(thumbUrl(photo))}" data-full="${esc(photo)}" alt="" loading="lazy"></span>` : icon('camera')}</span>
               <span class="color-photo-name">${esc(c)}</span></button>`;
           }).join('')}
         </div>
@@ -416,6 +420,7 @@ export function openProductSheet(productId) {
     const t = e.target;
     if (t.closest('[data-edit]')) { openProductForm(p, { onSaved: render }); return; }
     if (t.closest('[data-add-variants]')) { openVariantGenerator(p, { onDone: render }); return; }
+    if (t.closest('[data-quick]')) { openQuickProduct({ productId: p.id, onDone: render }); return; }
     const hero = t.closest('[data-hero]');
     if (hero) {
       if (!p.imageUrl) { photoMenu(hero, p, render); return; }
@@ -435,7 +440,7 @@ export function openProductSheet(productId) {
         try {
           const url = await Data.uploadProductImage(f, { square: true });
           const n = await Data.setColorPhoto(p.id, color, url);
-          toast(`Foto da cor ${color}`, { text: `Vale para ${n} ${n === 1 ? 'variação' : 'variações'} (pronta entrega e encomenda).` });
+          toast(`Foto da cor ${color}`, { text: n ? `Vale para ${n} ${n === 1 ? 'variação' : 'variações'} (pronta entrega e encomenda) e para as próximas.` : 'Vale para tudo que entrar nessa cor (pronta entrega e encomenda).' });
           render();
         } catch (err) { toastError('Não consegui salvar a foto', friendlyError(err)); cp.classList.remove('is-busy'); }
       });
@@ -1193,6 +1198,14 @@ export function openAddUnits(v, { onDone } = {}) {
     body: `
       <p class="small muted">Para aparelho que já está na loja (estoque inicial, troca, compra sem nota).
         Compra de fornecedor: use a <b>Entrada</b>, que rateia frete e câmbio no custo.</p>
+      <div class="noimei-box">
+        <div class="field"><label class="label" for="au-qty">Sem IMEI (só a quantidade)</label>
+          <input class="input" id="au-qty" type="number" inputmode="numeric" min="0" max="99" value="0" style="max-width:110px"></div>
+        <div class="field"><label class="label" for="au-qcost">Custo de cada</label>
+          <div class="money-input"><input class="input" id="au-qcost" ${MONEY_ATTRS} value="${esc(moneyInputValue(v.cost || 0))}"></div></div>
+        <p class="xs dim" style="align-self:center;margin:0">O IMEI é opcional - dá para anotar depois, ou na venda.</p>
+      </div>
+      <div class="fieldset-title" style="margin-top:6px">Com IMEI</div>
       <div data-rows></div>
       <div class="row gap-2 wrap">
         <button type="button" class="btn btn-sm" data-add-row>${icon('plus')} Outro aparelho</button>
@@ -1266,7 +1279,9 @@ export function openAddUnits(v, { onDone } = {}) {
     const btn = e.currentTarget;
     const list = rows.filter((r) => r.serial.trim());
     const err = (t) => { modal.body.querySelector('[data-erro-txt]').textContent = t; modal.body.querySelector('[data-erro]').classList.remove('hide'); };
-    if (!list.length) { err('Digite o IMEI / número de série de pelo menos um aparelho.'); return; }
+    const qty = Math.min(Math.max(Math.trunc(Number(modal.body.querySelector('#au-qty').value)) || 0, 0), 99);
+    const qcost = parseMoney(modal.body.querySelector('#au-qcost').value);
+    if (!list.length && !qty) { err('Digite o IMEI de um aparelho ou a quantidade sem IMEI.'); return; }
     const seen = new Set();
     for (const r of list) {
       const s = r.serial.trim().toUpperCase();
@@ -1274,6 +1289,7 @@ export function openAddUnits(v, { onDone } = {}) {
       seen.add(s);
       if (Data.units().some((u) => u.status === 'estoque' && u.serial.trim().toUpperCase() === s)) { err(`O IMEI ${r.serial} já está no estoque.`); return; }
     }
+    for (let i = 0; i < qty; i++) list.push({ serial: '', cost: qcost, origin: '', batteryHealth: '', notes: '' });
     if (list.some((r) => !(r.cost > 0))) {
       const go = await confirmDialog({ title: 'Aparelho sem custo', message: 'Algum aparelho está sem custo - o lucro dos pedidos vai sair errado. Cadastrar assim mesmo?', confirmText: 'Cadastrar assim' });
       if (!go) return;

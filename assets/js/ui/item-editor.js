@@ -7,7 +7,7 @@
  *     tem cadastrado);
  *   - a combinação escolhida mostra o preço e quanto tem em estoque;
  *   - aparelho com IMEI: a lista das unidades na loja para escolher QUAL
- *     sai (IMEI, bateria, origem). Sem escolher, fica como encomenda - o
+ *     sai (IMEI, bateria, origem). Sem escolher, o banco separa um do estoque - o
  *     pedido só pode ir para "Em entrega" depois de escolher;
  *   - combinação que ainda não existe é cadastrada junto com o pedido
  *     (encomenda), já com o preço digitado aqui.
@@ -247,8 +247,8 @@ export function openItemEditor({ item = null, productId = null, orderId = null, 
     const list = selectableUnits(v);
     it.unitIds = it.unitIds.filter((id) => list.some((u) => u.id === id));
     if (!list.length) {
-      box.innerHTML = `<p class="xs dim">${icon('device')} Nenhum aparelho desta combinação na loja. O pedido fica como encomenda:
-        escolha o IMEI quando o aparelho chegar (obrigatório antes de "Em entrega").</p>`;
+      box.innerHTML = `<p class="xs dim">${icon('device')} Nenhum aparelho desta combinação na loja. O pedido fica como encomenda
+        até o aparelho chegar (o IMEI é opcional).</p>`;
       return;
     }
     box.innerHTML = `
@@ -263,7 +263,7 @@ export function openItemEditor({ item = null, productId = null, orderId = null, 
               <span class="num xs money-sensitive dim">${esc(money(u.cost))}</span>
             </label>`).join('')}
         </div>
-        <span class="xs dim">${it.unitIds.length ? `${it.unitIds.length} escolhido(s).` : 'Nenhum escolhido: fica como encomenda (dá para escolher depois).'}</span>
+        <span class="xs dim">${it.unitIds.length ? `${it.unitIds.length} escolhido(s).` : 'Nenhum escolhido: o sistema separa um aparelho do estoque ao salvar (o IMEI é opcional).'}</span>
       </div>`;
   }
 

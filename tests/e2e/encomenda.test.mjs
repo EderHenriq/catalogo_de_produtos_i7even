@@ -124,8 +124,8 @@ await c.page.waitForTimeout(300);
 const cards = await c.page.locator('.cat-card').count();
 ok(cards === 1, `só encomenda: 1 modelo (${cards})`);
 ok((await c.page.locator('.cat-card').first().innerText()).includes('7 a 10 dias'), 'cartão com selo "Sob encomenda · prazo"');
-// tocar de novo no filtro ligado volta a mostrar tudo
-await (touch ? c.page.locator('[data-avail="encomenda"]').tap() : c.page.locator('[data-avail="encomenda"]').click());
+// aba "Tudo" volta a mostrar tudo (pronta entrega e encomenda em seções)
+await (touch ? c.page.locator('[data-avail="todos"]').tap() : c.page.locator('[data-avail="todos"]').click());
 ok((await c.page.locator('[data-count]').innerText()).startsWith('Exibindo'), `contador "Exibindo N produtos" (${await c.page.locator('[data-count]').innerText()})`);
 const ca = await audit(c.page, 'catalogo-novo', { mobile: touch }); if (ca.length) console.log('    ⚠', ca.join(' | '));
 await c.page.waitForTimeout(200);

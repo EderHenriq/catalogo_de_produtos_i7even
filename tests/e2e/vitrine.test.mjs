@@ -86,11 +86,12 @@ for (const device of ['iPhone 13', 'Desktop']) {
   await page.waitForTimeout(900);
   await page.screenshot({ path: `${SHOTS}vitrine-${tag}-1-topo.png` });
   ok(await page.locator('.cat-hero-sub, .cat-eyebrow').count() === 0, 'sem a frase embaixo da logo');
-  ok(await page.locator('.cat-profile h1').innerText().then((t) => t.includes('i7even store')), 'perfil da loja com o nome');
+  ok(await page.locator('.cat-brand h1').innerText().then((t) => t.includes('i7even store')), 'cartão da marca com o nome');
+  ok(!(await page.locator('.cat-foot').innerText()).includes('sujeitos'), 'rodapé sem o texto de preços sujeitos');
   ok(await page.locator('.cat-action').count() === 2, 'botões Instagram e Contato');
   ok(await page.locator('.cat-pill[data-cond="lacrado"]').count() === 1 && await page.locator('.cat-pill[data-cond="semi"]').count() === 1, 'filtros Todos · Lacrado · Semi');
   const first = await page.locator('.cat-card').first().innerText();
-  ok(/A partir de/.test(first) && /12x de/.test(first) && /Ver detalhes/.test(first), 'cartão: "A partir de", "12x de" e "Ver detalhes"');
+  ok(/A partir de/.test(first) && /12x de/.test(first) && /Ver opções/.test(first) && /Pronta entrega|Sob encomenda/.test(first), 'cartão: disponibilidade, "A partir de", "12x de" e "Ver opções"');
   ok(/cores/.test(first), `cartão com capacidade e cores (${first.split('\n').slice(0, 3).join(' | ')})`);
   const issues = await audit(page, 'vitrine', { mobile: touch });
   ok(!issues.length, `layout ok ${issues.join(' | ')}`);

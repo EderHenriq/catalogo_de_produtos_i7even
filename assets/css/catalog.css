@@ -53,7 +53,7 @@ html.cat-locked { overflow: hidden; }
   width: 40px; height: 40px;
   flex: none;
   border-radius: 11px;
-  background: var(--cat-ink) url('../brand/i7even-avatar-7.svg') center / cover no-repeat;
+  background: var(--cat-ink) url('../brand/i7even-avatar-i7.svg') center / cover no-repeat;
   box-shadow: 0 0 0 1px rgba(255, 255, 255, .08) inset;
 }
 .cat-brand-mark.sm { width: 34px; height: 34px; border-radius: 9px; }
@@ -72,7 +72,7 @@ html.cat-locked { overflow: hidden; }
 .cat-avatar {
   width: 84px; height: 84px; flex: none;
   border-radius: 50%;
-  background: var(--cat-ink) url('../brand/i7even-avatar-7.svg') center / 62% no-repeat;
+  background: var(--cat-ink) url('../brand/i7even-avatar-i7.svg') center / 62% no-repeat;
   box-shadow: 0 0 0 1px rgba(0, 0, 0, .06), 0 8px 22px rgba(0, 0, 0, .14);
 }
 .cat-avatar.sm { width: 32px; height: 32px; box-shadow: none; }
@@ -722,3 +722,102 @@ dialog.cat-sheet[open] { display: flex; align-items: flex-end; justify-content: 
 .cat-slide img { mix-blend-mode: multiply; }
 .cat-bag-thumb img { mix-blend-mode: multiply; }
 .cat-bag-thumb { background: var(--cat-photo-bg); }
+
+/* ===================================================== identidade i7 */
+/* Cartão da marca: grafite com o "i7" de marca d'água - o topo da vitrine é
+   da i7even, não um perfil genérico. Abas grandes separam pronta entrega
+   e encomenda (antes ficavam misturadas com os filtros). */
+
+.cat-brand { max-width: var(--cat-max); margin: 0 auto; padding: calc(14px + env(safe-area-inset-top)) var(--cat-pad) 0; }
+.cat-brand-card {
+  position: relative; overflow: hidden; isolation: isolate;
+  padding: 20px; border-radius: 26px;
+  background: radial-gradient(120% 140% at 0% 0%, #2a2c31 0%, #141518 55%, #0b0c0e 100%);
+  color: #fff;
+  box-shadow: 0 20px 40px -18px rgba(0, 0, 0, .45);
+}
+.cat-brand-card::after {
+  content: ''; position: absolute; z-index: -1; right: -40px; bottom: -70px; width: 260px; height: 260px;
+  background: url('../brand/i7even-avatar-i7.svg') center / contain no-repeat;
+  opacity: .07; transform: rotate(-12deg);
+}
+.cat-brand-top { display: flex; align-items: center; gap: 14px; }
+.cat-brand .cat-avatar { width: 68px; height: 68px; box-shadow: 0 0 0 1px rgba(255, 255, 255, .14), 0 10px 24px rgba(0, 0, 0, .4); }
+.cat-brand-info { min-width: 0; display: flex; flex-direction: column; gap: 4px; }
+.cat-brand-info h1 { margin: 0; display: flex; align-items: center; gap: 6px; font-size: clamp(20px, 3vw, 24px); font-weight: 700; letter-spacing: -.03em; color: #fff; }
+.cat-brand .cat-trust { color: #7ee2a0; }
+.cat-brand-meta { display: flex; flex-wrap: wrap; gap: 6px 12px; font-size: 12.5px; color: rgba(255, 255, 255, .66); }
+.cat-brand-meta span { display: inline-flex; align-items: center; gap: 5px; min-width: 0; }
+.cat-brand-meta .icon { width: 14px; height: 14px; }
+.cat-icon-btn.on-dark { align-self: flex-start; background: rgba(255, 255, 255, .08); border-color: rgba(255, 255, 255, .14); color: #fff; }
+.cat-icon-btn.on-dark:hover { background: rgba(255, 255, 255, .16); }
+.cat-brand .cat-actions { margin-top: 16px; }
+.cat-brand .cat-action { background: rgba(255, 255, 255, .08); border-color: rgba(255, 255, 255, .14); color: #fff; }
+.cat-brand .cat-action:hover { background: rgba(255, 255, 255, .16); }
+.cat-brand .cat-action.is-wa { background: var(--cat-wa); border-color: transparent; }
+.cat-brand .cat-action.is-wa .icon { color: #fff; }
+.cat-brand .cat-action.is-wa:hover { background: var(--cat-wa-hover); }
+
+/* abas Pronta entrega × Sob encomenda */
+.cat-avail-tabs {
+  max-width: var(--cat-max); margin: 14px auto 0; padding: 0 var(--cat-pad);
+  display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px;
+}
+.cat-avail-tab {
+  display: flex; align-items: center; gap: 10px; min-height: 60px; padding: 10px 12px; text-align: left;
+  border: 1.5px solid var(--border); border-radius: 18px; background: var(--surface); color: var(--text);
+  cursor: pointer; transition: border-color .2s, background .2s, transform .2s var(--cat-spring);
+  -webkit-tap-highlight-color: transparent;
+}
+.cat-avail-tab:active { transform: scale(.97); }
+.cat-avail-tab b { display: block; font-size: 14px; letter-spacing: -.01em; }
+.cat-avail-tab small { display: block; font-size: 11.5px; color: var(--text-3); }
+.cat-avail-ic { flex: none; width: 34px; height: 34px; display: grid; place-items: center; border-radius: 11px; background: var(--surface-2); color: var(--text-2); }
+.cat-avail-ic .icon { width: 18px; height: 18px; }
+.cat-avail-tab.is-ready .cat-avail-ic { background: var(--tone-green-bg); color: var(--tone-green-fg); }
+.cat-avail-tab.is-order .cat-avail-ic { background: var(--tone-indigo-bg); color: var(--tone-indigo-fg); }
+.cat-avail-tab[aria-selected='true'] { border-color: var(--text); box-shadow: 0 0 0 3px var(--accent-soft); }
+.cat-avail-tab.is-ready[aria-selected='true'] { border-color: var(--tone-green-dot); }
+.cat-avail-tab.is-order[aria-selected='true'] { border-color: var(--tone-indigo-dot); }
+@media (max-width: 560px) {
+  .cat-avail-tabs { gap: 6px; }
+  .cat-avail-tab { flex-direction: column; align-items: flex-start; gap: 6px; min-height: 84px; padding: 10px; }
+  .cat-avail-tab b { font-size: 13px; }
+  .cat-avail-tab small { font-size: 11px; }
+  .cat-brand-card { padding: 16px; border-radius: 22px; }
+  .cat-brand .cat-avatar { width: 58px; height: 58px; }
+}
+
+/* categorias: blocos arredondados (não círculos) */
+.cat-circle-img { border-radius: 20px; }
+.cat-cats { padding-top: 16px; }
+
+/* seções da grade */
+.cat-sec + .cat-sec { margin-top: 28px; }
+.cat-sec-head { display: flex; align-items: center; gap: 12px; margin: 0 0 12px; padding: 12px 14px; border-radius: 18px; }
+.cat-sec-head.is-ready { background: var(--tone-green-bg); }
+.cat-sec-head.is-order { background: var(--tone-indigo-bg); }
+.cat-sec-head h2 { margin: 0; font-size: 17px; letter-spacing: -.02em; }
+.cat-sec-head p { margin: 2px 0 0; font-size: 12.5px; color: var(--text-2); }
+.cat-sec-head > div { flex: 1; min-width: 0; }
+.cat-sec-ic { flex: none; width: 36px; height: 36px; display: grid; place-items: center; border-radius: 12px; background: rgba(255, 255, 255, .7); }
+.cat-sec-head.is-ready .cat-sec-ic { color: var(--tone-green-fg); }
+.cat-sec-head.is-order .cat-sec-ic { color: var(--tone-indigo-fg); }
+.cat-sec-ic .icon { width: 19px; height: 19px; }
+.cat-sec-n { flex: none; min-width: 30px; height: 26px; padding: 0 9px; display: grid; place-items: center; border-radius: 999px; background: rgba(255, 255, 255, .75); font: 700 12.5px var(--font); color: var(--text); }
+
+/* disponibilidade no cartão */
+.cat-card-avail { display: inline-flex; align-items: center; gap: 5px; font-size: 11.5px; font-weight: 650; letter-spacing: -.005em; }
+.cat-card-avail .icon { width: 13px; height: 13px; flex: none; }
+.cat-card-avail.is-ready { color: var(--tone-green-fg); }
+.cat-card-avail.is-order { color: var(--tone-indigo-fg); }
+.cat-card-cta { gap: 4px; }
+.cat-card-cta .icon { width: 15px; height: 15px; transition: transform .25s var(--cat-ease); }
+@media (hover: hover) { .cat-card:hover .cat-card-cta .icon { transform: translateX(3px); } }
+@media (max-width: 560px) {
+  .cat-avail-tab { align-items: center; justify-content: center; text-align: center; min-height: 72px; padding: 10px 6px; gap: 6px; }
+  .cat-avail-tab small { display: none; }
+  .cat-avail-tab b { font-size: 12.5px; line-height: 1.2; }
+  .cat-avail-ic { width: 30px; height: 30px; border-radius: 10px; }
+  .cat-brand .cat-trust { white-space: normal; }
+}

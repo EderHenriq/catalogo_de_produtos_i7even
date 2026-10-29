@@ -203,7 +203,7 @@ async function boot() {
   updateBagButton();
   // Barra compacta aparece quando o perfil da loja sai da tela.
   const mini = ROOT.querySelector('.cat-mini');
-  const profile = ROOT.querySelector('.cat-profile');
+  const profile = ROOT.querySelector('.cat-brand');
   const onScroll = () => mini?.classList.toggle('is-on', window.scrollY > (profile?.offsetHeight || 200) - 10);
   window.addEventListener('scroll', onScroll, { passive: true });
   onScroll();
@@ -248,24 +248,36 @@ function renderShell() {
       </div>
     </div>
 
-    <header class="cat-profile">
-      <div class="cat-profile-inner">
-        <span class="cat-avatar" role="img" aria-label="${esc(name)}"></span>
-        <div class="cat-profile-info grow">
-          <h1>${esc(name)} ${VERIFIED}</h1>
-          <p class="cat-trust">${icon('checkCircle')} Garantia em todos os aparelhos</p>
-          ${s.address ? `<p class="cat-meta">${icon('pin')} ${esc(s.address)}</p>` : ''}
-          ${ig ? `<p class="cat-meta">${icon('star')} @${esc(ig)}</p>` : ''}
+    <header class="cat-brand">
+      <div class="cat-brand-card">
+        <div class="cat-brand-top">
+          <span class="cat-avatar" role="img" aria-label="${esc(name)}"></span>
+          <div class="cat-brand-info grow">
+            <h1>${esc(name)} ${VERIFIED}</h1>
+            <p class="cat-trust">${icon('checkCircle')} Garantia em todos os aparelhos</p>
+            <div class="cat-brand-meta">
+              ${s.address ? `<span>${icon('pin')} ${esc(s.address)}</span>` : ''}
+              ${ig ? `<span>${INSTAGRAM} @${esc(ig)}</span>` : ''}
+            </div>
+          </div>
+          <button type="button" class="cat-icon-btn on-dark" data-share-store aria-label="Compartilhar o catálogo">${icon('share')}</button>
         </div>
-        <div class="cat-profile-tools">
-          <button type="button" class="cat-icon-btn" data-share-store aria-label="Compartilhar o catálogo">${icon('share')}</button>
+        <div class="cat-actions">
+          ${ig ? `<a class="cat-action" href="https://instagram.com/${esc(ig)}" target="_blank" rel="noopener">${INSTAGRAM} Instagram</a>` : ''}
+          ${wa ? `<a class="cat-action is-wa" href="${esc(wa)}" target="_blank" rel="noopener">${icon('whatsapp')} Falar com a loja</a>` : ''}
         </div>
-      </div>
-      <div class="cat-actions">
-        ${ig ? `<a class="cat-action" href="https://instagram.com/${esc(ig)}" target="_blank" rel="noopener">${INSTAGRAM} Instagram</a>` : ''}
-        ${wa ? `<a class="cat-action is-wa" href="${esc(wa)}" target="_blank" rel="noopener">${icon('whatsapp')} Contato</a>` : ''}
       </div>
     </header>
+
+    ${hasEnc ? `
+      <div class="cat-avail-tabs" role="tablist" aria-label="Disponibilidade">
+        <button type="button" role="tab" class="cat-avail-tab" data-avail="todos" aria-selected="${st.avail === 'todos'}">
+          <span class="cat-avail-ic">${icon('grid')}</span><span><b>Tudo</b><small>${products.length} modelos</small></span></button>
+        <button type="button" role="tab" class="cat-avail-tab is-ready" data-avail="pronta" aria-selected="${st.avail === 'pronta'}">
+          <span class="cat-avail-ic">${icon('checkCircle')}</span><span><b>Pronta entrega</b><small>leva hoje</small></span></button>
+        <button type="button" role="tab" class="cat-avail-tab is-order" data-avail="encomenda" aria-selected="${st.avail === 'encomenda'}">
+          <span class="cat-avail-ic">${icon('truck')}</span><span><b>Sob encomenda</b><small>${esc(leadText())}</small></span></button>
+      </div>` : ''}
 
     <nav class="cat-cats" data-cats aria-label="Categorias"></nav>
 
@@ -283,9 +295,6 @@ function renderShell() {
       <div class="cat-pills" role="group" aria-label="Condição">
         <button type="button" class="cat-pill" data-cond="todos" aria-pressed="${st.cond === 'todos'}">Todos</button>
         ${conds.map(([k, l]) => `<button type="button" class="cat-pill" data-cond="${k}" aria-pressed="${st.cond === k}">${esc(l)}</button>`).join('')}
-        ${hasEnc ? `<span class="cat-pills-sep"></span>
-          <button type="button" class="cat-pill" data-avail="pronta" aria-pressed="${st.avail === 'pronta'}">Pronta entrega</button>
-          <button type="button" class="cat-pill" data-avail="encomenda" aria-pressed="${st.avail === 'encomenda'}">Sob encomenda</button>` : ''}
       </div>
     </div>
 
@@ -305,7 +314,6 @@ function renderShell() {
     <footer class="cat-foot">
       <span class="cat-avatar sm"></span>
       <p><b>${esc(name)}</b></p>
-      <p>Preços sujeitos a alteração sem aviso · imagens ilustrativas</p>
     </footer>
 
     ${wa ? `<a class="cat-fab-wa" href="${esc(wa)}" target="_blank" rel="noopener" aria-label="Falar no WhatsApp">${icon('whatsapp')}</a>` : ''}
@@ -313,6 +321,14 @@ function renderShell() {
       ${icon('orders')}<span data-fab-text>Ver sacola</span><span class="cat-fab-total" data-fab-total></span>
     </button>`;
   renderCats();
+}
+
+/** Prazo da encomenda que mais aparece ("7 a 15 dias"). */
+function leadText() {
+  const count = new Map();
+  for (const p of products) for (const v of p.variants || []) if (hasOrder(v) && v.order_lead) count.set(v.order_lead, (count.get(v.order_lead) || 0) + 1);
+  const top = [...count.entries()].sort((a, b) => b[1] - a[1])[0];
+  return top ? `chega em ${top[0]}` : 'chega em poucos dias';
 }
 
 const INSTAGRAM = '<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="5"/><circle cx="12" cy="12" r="4"/><circle cx="17.5" cy="6.5" r="1" fill="currentColor" stroke="none"/></svg>';
@@ -324,7 +340,7 @@ function renderCats() {
   box.hidden = cats.length < 2 && !st.cat;
   box.innerHTML = cats.map((c) => {
     // Sem foto da categoria: a capa do primeiro modelo dela (fica igual à imoove).
-    const cover = c.image || products.find((p) => p.category_id === c.id && p.image)?.image || '';
+    const cover = c.image || products.filter((p) => p.category_id === c.id).map((p) => p.image || Object.values(p.color_photos || {})[0]).find(Boolean) || '';
     return `<button type="button" class="cat-circle" data-cat="${esc(c.id)}" aria-pressed="${st.cat === c.id}">
       <span class="cat-circle-img">${cover ? `<img src="${esc(thumbUrl(cover))}" data-full="${esc(cover)}" alt="" loading="lazy">` : `<span aria-hidden="true">${esc(c.emoji || '📱')}</span>`}</span>
       <span class="cat-circle-name">${esc(c.name)}</span></button>`;
@@ -382,7 +398,8 @@ function cardHTML(p) {
   const conds = [...new Set(vs.map(condKey))];
   const colors = [...new Set(vs.map((v) => v.color).filter(Boolean))];
   const dots = colors.map((c) => [c, swatch(c)]).filter(([, d]) => d).slice(0, 6);
-  const img = p.image || '';
+  // sem capa: a foto da primeira cor à venda
+  const img = p.image || vs.map((v) => v.image || p.color_photos?.[v.color]).find(Boolean) || Object.values(p.color_photos || {})[0] || '';
   const photos = 1 + (p.gallery || []).length;
   const inst = installmentText(min);
   return `
@@ -391,18 +408,21 @@ function cardHTML(p) {
         ${img ? `<img src="${esc(thumbUrl(img))}" ${thumbUrl(img) !== img ? `srcset="${esc(thumbUrl(img))} 720w, ${esc(img)} 1600w" sizes="(max-width: 640px) 50vw, (max-width: 1100px) 33vw, 300px"` : ''} data-full="${esc(img)}" alt="${esc(p.name)}" loading="lazy" decoding="async">`
           : `<span class="cat-photo-empty">${icon('device')}</span>`}
         <span class="cat-badges">
-          ${!anyAvail || st.avail === 'encomenda' ? `<span class="cat-badge order">Sob encomenda${leads.length === 1 ? ` · ${esc(leads[0])}` : ''}</span>` : last ? '<span class="cat-badge hot">Últimas unidades</span>' : ''}
+          ${anyAvail && st.avail !== 'encomenda' && last ? '<span class="cat-badge hot">Últimas unidades</span>' : ''}
           ${p.featured ? '<span class="cat-badge">Destaque</span>' : ''}
         </span>
         ${img && photos > 1 ? `<span class="cat-photo-dots" aria-hidden="true">${Array.from({ length: Math.min(photos, 4) }, (_, i) => `<i${i ? '' : ' class="on"'}></i>`).join('')}</span>` : ''}
       </span>
       <span class="cat-card-body">
+        <span class="cat-card-avail ${anyAvail && st.avail !== 'encomenda' ? 'is-ready' : 'is-order'}">${anyAvail && st.avail !== 'encomenda'
+          ? `${icon('checkCircle')} Pronta entrega`
+          : `${icon('truck')} Sob encomenda${leads.length === 1 ? ` · ${esc(leads[0])}` : ''}`}</span>
         <span class="cat-card-name">${esc(p.name)}</span>
         <span class="cat-card-spec">${esc(specLine(p, vs))}</span>
         <span class="cat-card-conds">${conds.map((k) => `<span class="cat-cond is-${k}">${esc(condLabel(k))}</span>`).join('')}</span>
         <span class="cat-card-price"><small>${vs.length > 1 ? 'A partir de' : 'Por'}</small><b>${esc(money(min))}</b>${inst ? `<small class="cat-inst">${inst}</small>` : ''}</span>
         ${dots.length ? `<span class="cat-dots">${dots.map(([c, d]) => `<span style="background:${d}" title="${esc(c)}"></span>`).join('')}${colors.length > dots.length ? `<em>+${colors.length - dots.length}</em>` : ''}</span>` : ''}
-        <span class="cat-card-cta">Ver detalhes</span>
+        <span class="cat-card-cta">Ver opções ${icon('chevronRight')}</span>
       </span>
     </button>`;
 }
@@ -439,8 +459,25 @@ function renderGrid() {
     return;
   }
   const cat = (st.data.categories || []).find((c) => c.id === st.cat);
-  grid.innerHTML = `${cat?.description ? `<p class="cat-desc">${esc(cat.description)}</p>` : ''}
-    <div class="cat-grid${st.view === 'list' ? ' is-list' : ''}">${list.map(cardHTML).join('')}</div>`;
+  const gridHTML = (items) => `<div class="cat-grid${st.view === 'list' ? ' is-list' : ''}">${items.map(cardHTML).join('')}</div>`;
+  // "Tudo": pronta entrega primeiro, depois a encomenda - cada uma com o seu título.
+  const ready = list.filter((p) => visibleVariants(p).some(hasReady));
+  const order = list.filter((p) => !ready.includes(p));
+  if (st.avail === 'todos' && ready.length && order.length) {
+    grid.innerHTML = `${cat?.description ? `<p class="cat-desc">${esc(cat.description)}</p>` : ''}
+      <section class="cat-sec">
+        <div class="cat-sec-head is-ready"><span class="cat-sec-ic">${icon('checkCircle')}</span>
+          <div><h2>Pronta entrega</h2><p>Na loja, pronto para levar hoje</p></div><span class="cat-sec-n">${ready.length}</span></div>
+        ${gridHTML(ready)}
+      </section>
+      <section class="cat-sec">
+        <div class="cat-sec-head is-order"><span class="cat-sec-ic">${icon('truck')}</span>
+          <div><h2>Sob encomenda</h2><p>${esc(leadText().replace(/^c/, 'C'))} · a loja confirma tudo no WhatsApp antes de você pagar</p></div><span class="cat-sec-n">${order.length}</span></div>
+        ${gridHTML(order)}
+      </section>`;
+    return;
+  }
+  grid.innerHTML = `${cat?.description ? `<p class="cat-desc">${esc(cat.description)}</p>` : ''}${gridHTML(list)}`;
 }
 
 /* ----------------------------------------------------- ficha do modelo -- */
@@ -495,7 +532,7 @@ function openProduct(id) {
     const both = v && hasReady(v) && hasOrder(v);
     // Foto da cor escolhida: a da própria variação ou de outra da mesma cor
     // (a versão sob encomenda aproveita a foto da pronta entrega).
-    const vImg = v?.image || (v?.color ? vs.find((x) => x.color === v.color && x.image)?.image : '') || '';
+    const vImg = v?.image || (v?.color && p.color_photos?.[v.color]) || (v?.color ? vs.find((x) => x.color === v.color && x.image)?.image : '') || '';
     const shown = vImg && !photos.includes(vImg) ? [vImg, ...photos] : photos;
     if (photoIdx >= shown.length) photoIdx = 0;
     dlg.innerHTML = `
@@ -884,9 +921,9 @@ ROOT.addEventListener('click', (e) => {
   const av = t.closest('[data-avail]');
   if (av) {
     // toque de novo no filtro ligado desliga (volta a mostrar tudo)
-    st.avail = st.avail === av.dataset.avail ? 'todos' : av.dataset.avail;
+    st.avail = av.dataset.avail;
     savePrefs();
-    ROOT.querySelectorAll('[data-avail]').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.avail === st.avail)));
+    ROOT.querySelectorAll('[data-avail]').forEach((b) => b.setAttribute('aria-selected', String(b.dataset.avail === st.avail)));
     renderGrid();
     updateBagButton();
     return;

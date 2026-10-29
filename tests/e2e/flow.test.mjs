@@ -151,7 +151,7 @@ r = await one(`select o.total, o.code, c.name from public.orders o join public.c
 ok(Number(r?.total) === 7999 && r.name === 'Marina Teste', 'pedido gravado (R$ 7.999) com cliente cadastrado');
 const ORDER_CODE = r.code;
 
-console.log('6. encomenda: sem IMEI não finaliza');
+console.log('6. encomenda: IMEI opcional');
 await tap(page.locator(touch ? '.fab' : '.sidebar [data-new]'));
 await page.waitForSelector('[data-save]');
 await page.locator('#f-name').fill('Cliente Encomenda');
@@ -169,11 +169,7 @@ await tap(top().locator('.modal-foot [data-ok]'));
 await page.waitForTimeout(250);
 await tap(top().locator('[data-done]'));
 await page.waitForTimeout(250);
-ok((await top().locator('.item-row').innerText()).includes('IMEI a definir'), 'item marcado "IMEI a definir"');
-await top().locator('#f-status').selectOption('entregue');
-await tap(top().locator('[data-save]'));
-await page.waitForTimeout(400);
-ok(await page.locator('.toast', { hasText: 'Escolha o IMEI' }).count() > 0, 'finalizar sem IMEI é barrado com aviso');
+ok((await top().locator('.item-row').innerText()).includes('IMEI opcional'), 'item sem IMEI escolhido: o sistema separa do estoque (IMEI opcional)');
 await top().locator('#f-status').selectOption('aguardando');
 await tap(top().locator('[data-save]'));
 r = await waitDb(`select status from public.orders where customer_name = 'Cliente Encomenda'`, (x) => x.length === 1);

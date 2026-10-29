@@ -15,7 +15,7 @@ values
   ('macbook', 'MacBook', '💻', 'MacBook Air e Pro.', 'RAM / SSD', 'Cor', 'Tamanho', true, array[]::text[], 30),
   ('ipad', 'iPad', '📋', 'iPad, iPad Air, iPad mini e iPad Pro.', 'Armazenamento', 'Cor', 'Tamanho', true, array[]::text[], 40),
   ('airpods', 'AirPods', '🎧', 'AirPods e AirPods Pro originais.', 'Versão', 'Cor', 'Tamanho', false, array[]::text[], 50),
-  ('console', 'Consoles', '🎮', 'PlayStation, Xbox e Nintendo.', 'Versão', 'Cor', 'Tamanho', true, array[]::text[], 60),
+  ('console', 'Consoles', '🎮', 'PlayStation, Xbox e Nintendo.', 'Armazenamento', 'Cor', 'Versão', true, array[]::text[], 60),
   ('perfume', 'Perfumes', '🧴', 'Perfumes importados originais.', 'Tamanho', 'Concentração', 'Tamanho', false, array[]::text[], 70),
   ('acessorio', 'Acessórios', '🔌', 'Carregadores, capas, películas e mais.', 'Tipo', 'Cor', 'Tamanho', false, array[]::text[], 80)
 on conflict (slug) do nothing;
@@ -97,9 +97,9 @@ from (values
   ('airpods-pro-2', 'airpods', 'AirPods Pro 2', 'Apple', 2022::smallint, array['Lightning', 'USB-C']::text[], array['Branco']::text[], array[]::text[], false),
   ('airpods-pro-3', 'airpods', 'AirPods Pro 3', 'Apple', 2025::smallint, array['USB-C']::text[], array['Branco']::text[], array[]::text[], false),
   ('airpods-max', 'airpods', 'AirPods Max', 'Apple', 2020::smallint, array['Lightning', 'USB-C']::text[], array['Cinza-espacial', 'Prateado', 'Verde', 'Azul-céu', 'Rosa', 'Meia-noite', 'Estelar', 'Roxo', 'Laranja']::text[], array[]::text[], false),
-  ('ps5-slim', 'console', 'PlayStation 5 Slim', null, 2023::smallint, array['Com leitor (1TB)', 'Digital (1TB)']::text[], array['Branco']::text[], array[]::text[], false),
-  ('ps5-pro', 'console', 'PlayStation 5 Pro', null, 2024::smallint, array['2TB']::text[], array['Branco']::text[], array[]::text[], false),
-  ('ps5-fat', 'console', 'PlayStation 5 (modelo antigo)', null, 2020::smallint, array['Com leitor (825GB)', 'Digital (825GB)']::text[], array['Branco']::text[], array[]::text[], false),
+  ('ps5-slim', 'console', 'PlayStation 5 Slim', null, 2023::smallint, array['1TB', '825GB']::text[], array['Branco']::text[], array['Com leitor de disco', 'Digital (sem leitor)']::text[], false),
+  ('ps5-pro', 'console', 'PlayStation 5 Pro', null, 2024::smallint, array['2TB']::text[], array['Branco']::text[], array['Digital (leitor vendido à parte)', 'Com leitor de disco']::text[], false),
+  ('ps5-fat', 'console', 'PlayStation 5 (modelo antigo)', null, 2020::smallint, array['825GB']::text[], array['Branco']::text[], array['Com leitor de disco', 'Digital (sem leitor)']::text[], false),
   ('ps-portal', 'console', 'PlayStation Portal', null, 2023::smallint, array['Padrão']::text[], array['Branco']::text[], array[]::text[], false),
   ('dualsense', 'console', 'Controle DualSense', null, 2020::smallint, array['Padrão', 'Edge']::text[], array['Branco', 'Preto', 'Vermelho', 'Azul', 'Roxo', 'Cinza camuflado', 'Outra cor']::text[], array[]::text[], false),
   ('xbox-series-x', 'console', 'Xbox Series X', null, 2020::smallint, array['1TB', '2TB Galaxy Black', 'Digital 1TB']::text[], array['Preto', 'Branco']::text[], array[]::text[], false),
@@ -139,6 +139,20 @@ from (values
 ) as x(slug, cat_slug, name, brand, year, storages, colors, sizes, review)
 join public.categories c on c.slug = x.cat_slug
 on conflict (slug) do nothing;
+
+-- v2.1 · PS5: versão (com leitor / digital) separada do armazenamento.
+-- Banco que já rodou o seed: corrige só o que ainda não tem venda/estoque cadastrado.
+update public.categories set variant_label = 'Armazenamento', size_label = 'Versão'
+ where slug = 'console' and variant_label = 'Versão' and size_label = 'Tamanho';
+update public.products set sizes = array['Com leitor de disco', 'Digital (sem leitor)']::text[], storages = array['1TB', '825GB']::text[]
+ where slug = 'ps5-slim' and storages @> array['Digital (1TB)']::text[]
+   and not exists (select 1 from public.product_variants v where v.product_id = products.id);
+update public.products set sizes = array['Com leitor de disco', 'Digital (sem leitor)']::text[], storages = array['825GB']::text[]
+ where slug = 'ps5-fat' and storages @> array['Digital (825GB)']::text[]
+   and not exists (select 1 from public.product_variants v where v.product_id = products.id);
+update public.products set sizes = array['Digital (leitor vendido à parte)', 'Com leitor de disco']::text[]
+ where slug = 'ps5-pro' and cardinality(sizes) = 0
+   and not exists (select 1 from public.product_variants v where v.product_id = products.id);
 
 -- Pedidos antigos passam a apontar para os modelos (relatórios por modelo).
 select public._relink_legacy_items() as itens_ligados_ao_cadastro;

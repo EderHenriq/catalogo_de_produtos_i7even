@@ -229,3 +229,7 @@ input[type='date']::-webkit-calendar-picker-indicator { cursor: pointer; opacity
 
 .animate-rise { animation: rise var(--t-base) both; }
 .animate-fade { animation: fade-in var(--t-base) both; }
+
+/* Ícone sem tamanho definido pela tela: acompanha o texto (antes ficava do
+   tamanho do bloco - o "triângulo gigante" do Catálogo). */
+.icon { width: 1.2em; height: 1.2em; flex: none; vertical-align: -0.22em; }

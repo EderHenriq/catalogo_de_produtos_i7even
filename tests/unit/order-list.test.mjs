@@ -204,3 +204,47 @@ iPhone Air 512 branco 8.200
 17 air 256 azul 7.000`);
   assert.deepEqual(rows.map((r) => r.product.id), ['iphone-air', 'iphone-air', 'iphone-air']);
 });
+
+test('lista real da loja (blocos: modelo / 💰 preço / ▫️ cores)', async () => {
+  const fs = await import('node:fs');
+  const text = fs.readFileSync(new URL('./fixtures/lista-i7even.txt', import.meta.url), 'utf8');
+  const { rows, missing, unknown } = read(text);
+  const key = (r) => `${r.product.id}|${r.storage}|${r.color}|${r.condition}|${r.price}`;
+  const all = rows.map(key);
+  assert.equal(rows.length, 36, `36 ofertas (${rows.length})`);
+  // cada cor do bloco vira uma oferta com o preço do bloco
+  assert.ok(all.includes('iphone-14|128GB|(PRODUCT)RED|Seminovo|2297'), 'vermelho = (PRODUCT)RED');
+  assert.ok(all.includes('iphone-14|128GB|Roxo|Seminovo|2297'), 'lilás = roxo');
+  assert.ok(all.includes('iphone-13|128GB|Meia-noite|Seminovo|2147'), 'preto num iPhone 13 = meia-noite');
+  assert.ok(all.includes('iphone-14-pro-max|128GB|Preto-espacial|Seminovo|3497'), 'preto num 14 Pro Max = preto-espacial');
+  assert.ok(all.includes('iphone-16-pro|128GB|Titânio deserto|Seminovo|4397'));
+  assert.ok(all.includes('iphone-17-pro-max|512GB|Prateado|Seminovo|7597'));
+  // seção LACRADOS / SEMINOVOS vale para os blocos de baixo
+  assert.ok(rows.filter((r) => r.product.id === 'iphone-18-pro-max').every((r) => r.condition === 'Lacrado'));
+  // cor que o cadastro não tem entra como nova (não some, não vira "todas as cores")
+  const burg = rows.find((r) => r.color === 'Burgundy');
+  assert.ok(burg && burg.newColor && !burg.issues.length, 'Burgundy entra como cor nova');
+  assert.ok(rows.every((r) => r.color), 'nenhuma oferta sem cor');
+  // modelo fora do cadastro volta para "Criar modelo", sem herdar o de cima
+  assert.equal(missing.length, 1);
+  assert.equal(missing[0].name, 'iPhone 17e');
+  assert.equal(missing[0].storage, '256GB');
+  assert.deepEqual(missing[0].colors, ['Rosa']);
+  assert.equal(missing[0].price, 3547);
+  assert.equal(unknown.length, 0, unknown.map((u) => u.line).join(' | '));
+});
+
+test('grudado, PS5 e quantidade', () => {
+  const { rows, unknown } = read(`iPhone 12 128GB Branco (Swap) R$1.950
+📍 PS5 SLIM DIGITAL 3.290
+iphone16promax 512 natural 8.900
+IPHONE 16E 128 BRANCO 3.700 (2 un)
+AirPods Pro 2 USB-C 3x 1.290`);
+  const k = rows.map((r) => `${r.product.id}|${r.qty ?? ''}`);
+  assert.ok(k.includes('ps5-slim|'), `PS5 vira PlayStation 5 Slim (${k})`);
+  assert.ok(k.includes('iphone-16-pro-max|'), '"iphone16promax" grudado');
+  assert.ok(k.includes('iphone-16e|2'), 'quantidade "(2 un)"');
+  assert.ok(k.includes('airpods-pro-2|3'), 'quantidade "3x"');
+  assert.ok(!rows.some((r) => r.product.id === 'iphone-12' && r.price === 3290), 'PS5 não herda o iPhone de cima');
+  assert.equal(unknown.length, 0);
+});

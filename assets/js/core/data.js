@@ -133,6 +133,7 @@ const productFromRow = (r) => ({
   id: r.id, code: r.code, slug: r.slug || '', categoryId: r.category_id || null, name: r.name, brand: r.brand || '',
   year: r.year || null, description: r.description || '', imageUrl: r.image_url || '',
   gallery: Array.isArray(r.gallery) ? r.gallery.filter(Boolean) : [],
+  colorPhotos: r.color_photos && typeof r.color_photos === 'object' && !Array.isArray(r.color_photos) ? r.color_photos : {},
   storages: r.storages || [], colors: r.colors || [], sizes: r.sizes || [],
   tracksSerial: !!r.tracks_serial, showInCatalog: r.show_in_catalog !== false, featured: !!r.featured,
   needsReview: !!r.needs_review, notes: r.notes || '', active: r.active !== false,
@@ -146,6 +147,7 @@ const variantFromRow = (r) => ({
   showInCatalog: r.show_in_catalog !== false, active: r.active !== false, createdAt: r.created_at, updatedAt: r.updated_at,
   onOrder: !!r.on_order, orderPrice: r.order_price == null ? 0 : num(r.order_price), orderCost: r.order_cost == null ? 0 : num(r.order_cost),
   orderLead: r.order_lead || '', orderSupplier: r.order_supplier || '', orderUpdatedAt: r.order_updated_at || null,
+  orderQty: r.order_qty == null ? null : Number(r.order_qty),
 });
 
 const unitFromRow = (r) => ({
@@ -855,17 +857,23 @@ export async function setPrices(items) {
  * Lista de encomenda do fornecedor (lida em core/order-list.js e conferida
  * na tela): publica tudo numa transação. @returns {{created, updated, removed}}
  */
-export async function importOrderList({ supplier = '', lead = '', replace = false, items = [] }) {
-  mute('products');
+/**
+ * Lista colada do WhatsApp → catálogo. mode 'pronta' (a lista da loja:
+ * preço + estoque, aparelho sem IMEI) ou 'encomenda' (lista do fornecedor).
+ */
+export async function importOrderList({ mode = 'encomenda', supplier = '', lead = '', replace = false, items = [] }) {
+  mute('products', 'units');
   const res = await rpc('import_order_list', { p: {
+    mode: mode === 'pronta' ? 'pronta' : 'encomenda',
     supplier: str(supplier).trim(), lead: str(lead).trim(), replace: !!replace,
     items: items.map((it) => ({
       product_id: it.productId, storage: str(it.storage), color: str(it.color), size: str(it.size),
       condition: str(it.condition) || 'Lacrado', cost: Math.max(num(it.cost), 0), price: round2(num(it.price)),
+      qty: it.qty ? Math.min(Math.max(Math.trunc(num(it.qty)), 1), 99) : null,
     })),
   } });
-  await reload('products');
-  return res || { created: 0, updated: 0, removed: 0 };
+  await reload('products', 'units');
+  return res || { created: 0, updated: 0, removed: 0, units: 0 };
 }
 
 /** Tira variações da encomenda (uma, várias ou a lista inteira de um fornecedor). */
@@ -893,15 +901,28 @@ export async function applyColorPhoto(productId, color, url) {
   return ids.length;
 }
 
-/** Troca a foto de TODAS as variações de uma cor do modelo ("Fotos por cor" na ficha). */
+/**
+ * Foto de uma cor do modelo ("Fotos por cor" na ficha): fica no MODELO e vale
+ * para toda variação dessa cor - pronta entrega, encomenda, lista do WhatsApp -
+ * até as que ainda vão ser criadas. Foto própria de uma variação continua
+ * vencendo. url vazia tira a foto da cor.
+ */
 export async function setColorPhoto(productId, color, url) {
-  const ids = state.variants.filter((v) => v.productId === productId && v.color === color).map((v) => v.id);
-  if (!ids.length) return 0;
+  const p = product(productId);
+  if (!p || !color) return 0;
+  const next = { ...(p.colorPhotos || {}) };
+  if (url) next[color] = url; else delete next[color];
   mute('products');
-  const { error } = await getClient().from('product_variants').update({ image_url: url || null }).in('id', ids);
+  const { error } = await getClient().from('products').update({ color_photos: next }).eq('id', productId);
   if (error) throw error;
   await reload('products');
-  return ids.length;
+  return state.variants.filter((v) => v.productId === productId && v.color === color).length;
+}
+
+/** A foto que a variação mostra: a dela, a da cor no modelo, ou a capa. */
+export function variantPhoto(v) {
+  const p = product(v?.productId);
+  return v?.imageUrl || (v?.color && p?.colorPhotos?.[v.color]) || p?.imageUrl || '';
 }
 
 /** Ajusta o valor de venda de uma oferta de encomenda (sem mexer no resto). */
@@ -1022,7 +1043,7 @@ export async function deleteProductImage(url, { except = null } = {}) {
   const marker = `/object/public/${APP.photoBucket}/`;
   const i = String(url || '').indexOf(marker);
   if (i < 0) return;
-  const used = state.products.some((p) => (p.imageUrl === url || p.gallery.includes(url)) && p.id !== except)
+  const used = state.products.some((p) => (p.imageUrl === url || p.gallery.includes(url) || Object.values(p.colorPhotos || {}).includes(url)) && p.id !== except)
     || state.variants.some((v) => v.imageUrl === url && v.id !== except)
     || state.categories.some((c) => c.image === url && c.id !== except);
   if (used) return;
