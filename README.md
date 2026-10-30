@@ -36,6 +36,22 @@ de pausar.
    sozinho todo dia às 06:23. Sem os secrets, ele só faz o "sinal de vida"
    (que já impede a pausa) e pula o backup.
 
+**Domínio próprio (quando ligar o da i7even):**
+1. Netlify → *Domain management* → *Add a domain* (o principal e o `www`);
+   aponte o DNS como o Netlify pedir. O HTTPS sai sozinho.
+2. Supabase → *Authentication → URL Configuration*: *Site URL* = o domínio
+   novo e, em *Redirect URLs*, `https://SEU-DOMINIO/**` (é para onde volta
+   o "esqueci a senha").
+3. `catalogo.html`: troque `og:image` e `og:url` para o domínio novo (é a
+   prévia do link no WhatsApp).
+4. Recomendado: o catálogo no endereço principal e o painel num subdomínio
+   (ex.: `painel.SEU-DOMINIO`, adicionado como alias no Netlify). No
+   `netlify.toml`, antes da regra `/*`:
+   `[[redirects]] from = "https://SEU-DOMINIO/" to = "/catalogo.html" status = 200 force = true`.
+   Quem recebe o link do catálogo nem vê a tela de login.
+5. O cabeçalho HSTS vale para os subdomínios: todos precisam de HTTPS.
+6. Confira: `cd tests && SITE_URL=https://SEU-DOMINIO npm run test:security`.
+
 **Regra da vitrine (out/2026, sem SQL novo):** a **Vitrine** é o cadastro de
 tudo que a loja vende (abre em "Todos": os modelos da pasta Imagens, com ou sem
 preço e foto). A **lista do WhatsApp** colada só puxa esses modelos e entra
