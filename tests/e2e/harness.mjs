@@ -23,7 +23,9 @@ fs.mkdirSync(SHOTS, { recursive: true });
 const CHROME = process.env.CHROME_PATH || 'C:/Program Files/Google/Chrome/Application/chrome.exe';
 
 export async function createDb() {
-  const db = new PGlite();
+  // Coluna date chega como texto "AAAA-MM-DD", igual ao Supabase (PostgREST),
+  // e não como Date em UTC - senão a tela mostra o dia anterior no Brasil.
+  const db = new PGlite({ parsers: { 1082: (v) => v } });
   await db.exec(`
     create role anon nologin; create role authenticated nologin;
     create schema auth;

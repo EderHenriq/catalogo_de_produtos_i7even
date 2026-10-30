@@ -497,7 +497,7 @@ export function orderFromRequest(r) {
     return Data.newItemDraft(v && p ? {
       productId: p.id, categoryId: p.categoryId || '', variantId: v.id, productName: p.name,
       variant: v.storage, color: v.color, size: v.size, condition: v.condition,
-      qty: i.qty, unitPrice: i.unitPrice, warrantyDays: Number(warranty[v.condition]) || 0,
+      qty: i.qty, unitPrice: i.unitPrice, unitCost: v.cost || 0, warrantyDays: Number(warranty[v.condition]) || 0,
       ...(i.mode === 'encomenda' ? { note: `Sob encomenda${i.lead ? ` · ${i.lead}` : ''}`, unitCost: v.orderCost || 0, costSource: v.cost > 0 ? 'auto' : 'manual' } : {}),
     } : { productName: i.name, qty: i.qty, unitPrice: i.unitPrice, costSource: 'manual' });
   });

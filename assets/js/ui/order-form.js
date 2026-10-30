@@ -13,6 +13,7 @@ import { paymentsHTML, wirePayments } from './payments.js';
 import { mountPlanEditor } from './plan-editor.js';
 import { openModal, toast, toastError, confirmDialog, withLoading } from './kit.js';
 import { icon } from './icons.js';
+import { pref, setPref } from './common.js';
 import {
   esc, money, parseMoney, moneyInputValue, maskPhone, maskCEP, onlyDigits, todayISO, isMobile, uid,
 } from '../core/utils.js';
@@ -34,7 +35,8 @@ export function computeTotals(order) {
  *   prefill: campos de um pedido novo já preenchidos (ex.: pedido do catálogo)
  */
 export function openOrderForm({ order = null, prefill = null, onSaved } = {}) {
-  const draft = order ? structuredClone(order) : { ...newOrderDraft(), ...(prefill || {}) };
+  const draft = order ? structuredClone(order)
+    : { ...newOrderDraft(), channel: pref('order.channel', 'Instagram'), ...(prefill || {}) };
   const editing = !!draft.id;
   const initial = JSON.stringify(draft);
 
@@ -121,10 +123,25 @@ export function openOrderForm({ order = null, prefill = null, onSaved } = {}) {
     }),
     (lista) => {
       draft.payments = lista;
+      syncPayMethod();
       renderPayments();
       renderTotals();
     },
   );
+
+  /*
+   * "Forma combinada" acompanha o que foi recebido enquanto ninguém a
+   * escolheu à mão: recebeu tudo no cartão → o PDF e o WhatsApp não dizem "PIX".
+   */
+  let payMethodTouched = Boolean(order?.id);
+  function syncPayMethod() {
+    if (payMethodTouched) return;
+    const methods = [...new Set(draft.payments.filter((p) => !p.trade && p.method).map((p) => p.method))];
+    if (methods.length !== 1 || methods[0] === draft.paymentMethod) return;
+    draft.paymentMethod = methods[0];
+    const sel = panel.querySelector('[data-field="paymentMethod"]');
+    if (sel) sel.value = methods[0];
+  }
 
   /* ------------------------------------------------------------- itens */
 
@@ -319,6 +336,7 @@ export function openOrderForm({ order = null, prefill = null, onSaved } = {}) {
     else draft[f.dataset.field] = f.value;
     if (f.dataset.field === 'customerName') fillFromCustomer(f.value);
     if (f.dataset.field === 'status') { renderStatusHint(); renderSaleHint(); }
+    if (f.dataset.field === 'paymentMethod') payMethodTouched = true;
   });
 
   // Busca de CEP pelos Correios (ViaCEP) - preenche o endereço sozinho.
@@ -362,6 +380,7 @@ export function openOrderForm({ order = null, prefill = null, onSaved } = {}) {
       const el = panel.querySelector(`[data-field="${field}"]`);
       if (el && value && !el.value) { el.value = value; draft[field] = value; touched = true; }
     }
+    if (draft.customerEmail || draft.customerDoc) panel.querySelector('[data-more-client]')?.setAttribute('open', '');
     if (touched) toast('Dados do cliente preenchidos', { kind: 'info', duration: 2200 });
   }
 
@@ -434,6 +453,7 @@ export function openOrderForm({ order = null, prefill = null, onSaved } = {}) {
       // o banco grava o pagamento e o aparelho no estoque juntos.
       const trades = draft.payments.filter((p) => p.trade && !p.tradeUnitId && !(order?.payments || []).some((x) => x.id === p.id));
       let saved = await Data.saveOrder({ ...draft, payments: draft.payments.filter((p) => !trades.includes(p)) });
+      if (!editing && draft.channel && !prefill?.channel) setPref('order.channel', draft.channel);
       for (const t of trades) {
         try { saved = await Data.registerTradeIn(saved.id, t); } catch (err) { toastError('O pedido foi salvo, mas o aparelho da troca não entrou', friendlyError(err)); }
       }
@@ -489,7 +509,7 @@ function options(list, current) {
 }
 
 function bodyHTML(d) {
-  const names = Data.customersList().filter((c) => c.active).map((c) => c.name).slice(0, 500);
+  const clients = Data.customersList().filter((c) => c.active).slice(0, 500);
 
   return `
     <section class="fieldset">
@@ -499,7 +519,7 @@ function bodyHTML(d) {
           <label class="label" for="f-name">Nome *</label>
           <input class="input" id="f-name" data-field="customerName" list="clientes" maxlength="120"
                  value="${esc(d.customerName)}" placeholder="Nome do cliente" autocomplete="off" data-autofocus>
-          <datalist id="clientes">${names.map((n) => `<option value="${esc(n)}"></option>`).join('')}</datalist>
+          <datalist id="clientes">${clients.map((c) => `<option value="${esc(c.name)}">${esc(c.phone ? maskPhone(c.phone) : '')}</option>`).join('')}</datalist>
         </div>
         <div class="field span-3 span-half-mobile">
           <label class="label" for="f-phone">WhatsApp</label>
@@ -512,16 +532,22 @@ function bodyHTML(d) {
             <option value="">-</option>${options(CHANNELS, d.channel)}
           </select>
         </div>
-        <div class="field span-6">
-          <label class="label" for="f-email">E-mail <span class="dim">(opcional)</span></label>
-          <input class="input" id="f-email" data-field="customerEmail" type="email" maxlength="160"
-                 value="${esc(d.customerEmail)}" placeholder="-">
-        </div>
-        <div class="field span-6">
-          <label class="label" for="f-doc">CPF / documento <span class="dim">(opcional)</span></label>
-          <input class="input" id="f-doc" data-field="customerDoc" maxlength="30"
-                 value="${esc(d.customerDoc)}" placeholder="-">
-        </div>
+        <details class="ie-extras span-12" data-more-client ${d.customerEmail || d.customerDoc || !isMobile() ? 'open' : ''}>
+          <summary>E-mail e CPF <span class="dim">(opcional)</span>
+            <span class="summary-chev">${icon('chevronDown')}</span></summary>
+          <div class="form-grid">
+            <div class="field span-6">
+              <label class="label" for="f-email">E-mail</label>
+              <input class="input" id="f-email" data-field="customerEmail" type="email" maxlength="160"
+                     value="${esc(d.customerEmail)}" placeholder="-">
+            </div>
+            <div class="field span-6">
+              <label class="label" for="f-doc">CPF / documento</label>
+              <input class="input" id="f-doc" data-field="customerDoc" maxlength="30"
+                     value="${esc(d.customerDoc)}" placeholder="-">
+            </div>
+          </div>
+        </details>
       </div>
     </section>
 

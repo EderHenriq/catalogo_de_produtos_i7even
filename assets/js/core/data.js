@@ -582,7 +582,8 @@ export function customerStats() {
       entry.spent += o.total;
       entry.owed += o.balance;
     }
-    if (!entry.lastAt || new Date(o.createdAt) > new Date(entry.lastAt)) entry.lastAt = o.createdAt;
+    const at = o.orderDate || o.createdAt;
+    if (!entry.lastAt || String(at) > String(entry.lastAt)) entry.lastAt = at;
   }
   return [...byId.values()].sort((a, b) => b.spent - a.spent || sortPt(a.name, b.name));
 }
@@ -1460,6 +1461,9 @@ export async function setPriority(id, priority) {
 
 /** Pagamento lançado direto (ficha do pedido). O id nasce aqui: reenvio não duplica. */
 export async function savePayment(orderId, p) {
+  // Aparelho na troca lançado agora (A receber, parcela, "Pago"...): o
+  // pagamento e o aparelho no estoque vão juntos, como na ficha do pedido.
+  if (p.trade && !p.tradeUnitId && !order(orderId)?.payments.some((x) => x.id === p.id)) return registerTradeIn(orderId, p);
   const row = {
     id: isUuid(p.id) ? p.id : uid(),
     order_id: orderId,

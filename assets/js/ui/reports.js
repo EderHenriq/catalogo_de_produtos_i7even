@@ -105,18 +105,25 @@ export function mount(host) {
     /*
      * Dinheiro que ENTROU no período, olhando a data de cada pagamento - não a
      * data do pedido. Com parcelamento os dois números se descolam: uma venda
-     * de setembro pode pingar no caixa até dezembro.
+     * de setembro pode pingar no caixa até dezembro. A divisão por forma de
+     * pagamento sai daqui também: o que entrou em PIX, cartão, troca...
      */
     const caixa = all.reduce((acc, o) => {
       for (const p of o.payments || []) {
         const d = toDate(p.date);
         if (d >= from && d < to) {
-          acc.valor += Number(p.amount) || 0;
+          const v = Number(p.amount) || 0;
+          acc.valor += v;
           acc.qtd += 1;
+          const m = p.method || 'Não informado';
+          const e = acc.porForma.get(m) || { label: m, value: 0, qty: 0 };
+          e.value += v;
+          e.qty += 1;
+          acc.porForma.set(m, e);
         }
       }
       return acc;
-    }, { valor: 0, qtd: 0 });
+    }, { valor: 0, qtd: 0, porForma: new Map() });
 
     const header = `
       <div class="section-head">
@@ -180,10 +187,12 @@ export function mount(host) {
           )}</div>
         </div>
         <div class="card">
-          <div class="card-head"><h3>Formas de pagamento</h3></div>
+          <div class="card-head"><h3>Formas de pagamento</h3><span class="xs dim">recebido no período</span></div>
           <div class="card-body">${rankBarsHTML(
-            aggregateOrders(inPeriod, (o) => o.paymentMethod || 'Não informado'),
-            { color: 'var(--viz-2)' },
+            [...caixa.porForma.values()]
+              .sort((a, b) => b.value - a.value)
+              .map((e) => ({ ...e, sub: `${e.qty} ${e.qty === 1 ? 'recebimento' : 'recebimentos'}` })),
+            { color: 'var(--viz-2)', emptyText: 'Nenhum pagamento recebido no período.' },
           )}</div>
         </div>
         <div class="card">

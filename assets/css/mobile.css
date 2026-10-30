@@ -250,9 +250,9 @@ button, a, input, select, textarea, label, summary {
     min-height: var(--tap);
     padding: 4px 0;
   }
-  .funnel-label { grid-column: 1; font-size: var(--fs-md); }
-  .funnel-count { grid-column: 2; font-size: var(--fs-base); }
-  .funnel-bar { grid-column: 1 / -1; height: 10px; }
+  .funnel-label { grid-column: 1; grid-row: 1; font-size: var(--fs-md); }
+  .funnel-count { grid-column: 2; grid-row: 1; font-size: var(--fs-base); }
+  .funnel-bar { grid-column: 1 / -1; grid-row: 2; height: 10px; }
 
   .rank-name { font-size: var(--fs-base); }
   .rank-value { font-size: var(--fs-base); }

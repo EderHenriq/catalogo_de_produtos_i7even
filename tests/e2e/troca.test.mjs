@@ -90,6 +90,25 @@ r = await waitDb(`select o.code, p.method, p.amount, u.status, u.cost from publi
 ok(r.length === 1 && r[0].method === 'Aparelho na troca' && Number(r[0].amount) === 1000 && r[0].status === 'estoque' && Number(r[0].cost) === 1000,
   'pedido criado: troca de 1.000 lançada e o iPhone 12 no estoque');
 
+console.log('4. A receber: parcela paga com aparelho na troca');
+const o4 = await one(`insert into public.orders (user_id, customer_name, status, legacy_migrated) values ($1, 'Fiado Com Troca', 'aguardando', true) returning id`, [user]);
+await env.db.query(`insert into public.order_items (order_id, position, variant_id, product_id, product_name, qty, unit_price) values ($1, 1, $2, $3, $4, 1, 3000)`, [o4.id, vCapa.id, capa.id, capa.name]);
+await env.db.query(`insert into public.order_installments (order_id, number, due_date, amount) values ($1, 1, current_date - 3, 1500), ($1, 2, current_date + 27, 1500)`, [o4.id]);
+await env.db.query(`update public.orders set updated_at = now() where id = $1`, [o4.id]);
+await page.evaluate(async () => { const m = await import('/assets/js/core/data.js'); await m.reload('orders'); });
+await page.evaluate(() => { location.hash = '#/receber'; });
+await page.waitForSelector('.inst-row');
+await page.locator('.inst-row', { hasText: 'Fiado Com Troca' }).first().locator('[data-receive]').tap();
+await page.waitForSelector('#pay-method');
+await fillTrade({ model: 'iPhone 11', storage: '128GB', color: 'Branco', bat: 81, serial: '359000000000999', value: '1.500,00' });
+await top().locator('.modal-foot [data-ok]').tap();
+r = await waitDb(`select p.method, p.amount, u.status, u.cost from public.payments p left join public.units u on u.id = p.trade_unit_id
+  where p.order_id = '${o4.id}'`, (x) => x.length === 1 && x[0].status);
+ok(r.length === 1 && r[0].method === 'Aparelho na troca' && Number(r[0].amount) === 1500 && r[0].status === 'estoque' && Number(r[0].cost) === 1500,
+  `pela tela A receber a troca também põe o iPhone 11 no estoque (${JSON.stringify(r[0] || {})})`);
+r = await one(`select balance from public.orders where id = $1`, [o4.id]);
+ok(Number(r.balance) === 1500, `falta a 2ª parcela (${r.balance})`);
+
 ok(errors.length === 0, `sem erro de JS ${errors.join(' | ')}`);
 await browser.close();
 console.log(fails ? `\n${fails} FALHA(S)` : '\nTUDO OK');

@@ -512,12 +512,26 @@ function route(id, params = {}) {
   if (pendingSearch !== null && found.search) applyPendingSearch();
   else if (found.search && $search.value) current.onSearch?.($search.value);
 
-  // No celular o título já está na barra de cima: o mesmo título repetido
-  // no topo da tela some (fica a contagem e os botões).
-  const h2 = viewHost.querySelector('.section-head h2');
-  if (h2 && h2.textContent.trim() === found.label) h2.classList.add('is-dup-title');
+  markDupTitle(viewHost, found.label);
 
   window.scrollTo({ top: 0, behavior: 'instant' });
+}
+
+/*
+ * No celular o título já está na barra de cima: o mesmo título repetido no
+ * topo da tela some (fica a contagem e os botões). Vale também para a tela
+ * que monta depois de carregar (Ajustes) ou que se redesenha inteira.
+ */
+let titleObserver = null;
+function markDupTitle(host, label) {
+  titleObserver?.disconnect();
+  const mark = () => {
+    const h2 = host.querySelector('.section-head h2');
+    if (h2 && !h2.classList.contains('is-dup-title') && h2.textContent.trim() === label) h2.classList.add('is-dup-title');
+  };
+  mark();
+  titleObserver = new MutationObserver(mark);
+  titleObserver.observe(host, { childList: true, subtree: true });
 }
 
 function applyPendingSearch() {

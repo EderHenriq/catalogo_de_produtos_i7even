@@ -95,6 +95,7 @@
   overflow: hidden;
 }
 .rank-fill {
+  display: block;
   height: 100%;
   border-radius: 4px;
   background: var(--viz-1);
@@ -123,7 +124,7 @@
 }
 .funnel-row:hover { opacity: .72; }
 .funnel-bar { height: 22px; border-radius: 5px; background: var(--viz-track); overflow: hidden; }
-.funnel-fill { height: 100%; border-radius: 5px; animation: grow-x var(--t-slow) both; }
+.funnel-fill { display: block; height: 100%; border-radius: 5px; animation: grow-x var(--t-slow) both; }
 .funnel-count { font-family: var(--font-num); font-size: var(--fs-md); font-weight: 600; font-variant-numeric: tabular-nums; text-align: right; }
 
 @media (max-width: 520px) {
