@@ -80,6 +80,13 @@
 
 # ----------------------------------------------------------------- rotas --
 # A navegação é por hash (#/pedidos), então qualquer caminho cai no index.
+# Arquivo que não existe em /assets dá 404 de verdade (antes voltava a página
+# do sistema com 200 - a prévia do catálogo no WhatsApp ficava sem imagem).
+# Sem force: arquivo que existe é servido normalmente.
+[[redirects]]
+  from = "/assets/*"
+  to = "/404"
+  status = 404
 
 # Pastas internas (SQL, testes, documentação) não são servidas pelo site.
 [[redirects]]

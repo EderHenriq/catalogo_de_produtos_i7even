@@ -724,7 +724,7 @@ function openProduct(id) {
         requestAnimationFrame(() => { car.scrollLeft = photoIdx * car.clientWidth; });
         car.addEventListener('scroll', () => {
           const i = Math.round(car.scrollLeft / Math.max(car.clientWidth, 1));
-          if (i !== photoIdx) { photoIdx = i; dlg.querySelectorAll('[data-slide]').forEach((b) => b.setAttribute('aria-pressed', String(Number(b.dataset.slide) === i))); }
+          if (i !== photoIdx) { photoIdx = i; markDot(i); }
         }, { passive: true });
       }
       if (oldSrc) crossfade(dlg.querySelector('.cat-slide'), oldSrc);
@@ -735,12 +735,18 @@ function openProduct(id) {
     if (finePointer.matches && dlg.open && !dlg.contains(document.activeElement)) dlg.querySelector('.cat-sheet-panel')?.focus({ preventScroll: true });
   }
 
+  /** Bolinha da foto atual (na hora: o Safari nem sempre avisa o fim da rolagem suave). */
+  function markDot(i) {
+    dlg.querySelectorAll('[data-slide]').forEach((b) => b.setAttribute('aria-pressed', String(Number(b.dataset.slide) === i)));
+  }
+
   /** Setas (computador) e teclado: foto anterior/próxima, dando a volta. */
   function stepPhoto(d) {
     const car = dlg.querySelector('[data-carousel]');
     const n = dlg.querySelectorAll('.cat-slide').length;
     if (!car || n < 2) return;
     photoIdx = (photoIdx + d + n) % n;
+    markDot(photoIdx);
     car.scrollTo({ left: photoIdx * car.clientWidth, behavior: reduceMotion.matches ? 'auto' : 'smooth' });
   }
   dlg.addEventListener('keydown', (e) => {
@@ -772,7 +778,7 @@ function openProduct(id) {
     const md = e.target.closest('[data-mode]');
     if (md) { mode = md.dataset.mode; render(); return; }
     const s = e.target.closest('[data-slide]');
-    if (s) { photoIdx = Number(s.dataset.slide); const car = dlg.querySelector('[data-carousel]'); car?.scrollTo({ left: photoIdx * car.clientWidth, behavior: 'smooth' }); return; }
+    if (s) { photoIdx = Number(s.dataset.slide); markDot(photoIdx); const car = dlg.querySelector('[data-carousel]'); car?.scrollTo({ left: photoIdx * car.clientWidth, behavior: 'smooth' }); return; }
     const step = e.target.closest('[data-q-step]');
     if (step) { qty = Math.min(Math.max(qty + Number(step.dataset.qStep), 1), 20); dlg.querySelector('[data-qty]').textContent = qty; return; }
     if (e.target.closest('[data-add]')) {

@@ -68,7 +68,12 @@ for (const device of ['Desktop', 'iPhone 13']) {
   });
   let s = await st();
   console.log('   ', JSON.stringify(s));
-  ok2(!/cat-close/.test(s.active || ''), `foco ao abrir não fica no X (${s.active})`);
+  // computador: foco no painel (sem anel azul no X); iPhone: NUNCA no painel
+  // (o Safari rolava a janela durante a animação e a ficha abria fora do lugar)
+  // (no iPhone confere o atributo: o Chrome dá foco a qualquer área que rola, o Safari não)
+  const autofocus = await page.evaluate(() => document.querySelector('.cat-sheet[open] .cat-sheet-panel').hasAttribute('autofocus'));
+  ok2(device === 'Desktop' ? /cat-sheet-panel/.test(s.active || '') && autofocus : !autofocus,
+    `foco de abertura certo para o aparelho (${s.active}, autofocus no painel: ${autofocus})`);
   // garante a cor com 3 fotos
   if (s.slides < 3) { await page.locator(`.cat-sheet[open] [data-opt="color"][data-val="${colors[0]}"]`).click(); await page.waitForTimeout(700); s = await st(); console.log('   ', JSON.stringify(s)); }
   if (device === 'Desktop') {
