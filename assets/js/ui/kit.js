@@ -85,11 +85,12 @@ export function openModal(spec) {
   dlg.className = 'modal';
   const sizeClass = (spec.size && spec.size !== 'sm' ? ` ${spec.size}` : '') + (spec.sheet ? ' sheet' : '');
 
-  // O foco inicial do showModal() fica no próprio painel (autofocus): senão
-  // cairia no X do topo, que abria com o anel azul em toda ficha.
+  // Computador: o foco inicial do showModal() fica no próprio painel
+  // (autofocus) - senão cairia no X do topo, com anel azul. Na tela de toque
+  // não: o Safari do iPhone desloca a tela para mostrar o painel focado.
   dlg.innerHTML = `
     <div class="modal-inner">
-      <div class="modal-panel${sizeClass}" role="document" tabindex="-1" autofocus>
+      <div class="modal-panel${sizeClass}" role="document"${TOUCH.matches ? '' : ' tabindex="-1" autofocus'}>
         <header class="modal-head">
           <div class="grow">
             <h2>${esc(spec.title)}</h2>

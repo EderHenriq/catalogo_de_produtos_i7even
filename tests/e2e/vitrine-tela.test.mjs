@@ -46,7 +46,25 @@ await page.waitForTimeout(400);
 const scroll = await page.evaluate(() => { const s = document.querySelector('.sidebar'); s.scrollTop = 9999; return { over: s.scrollHeight > s.clientHeight, top: s.scrollTop }; });
 ok(scroll.over && scroll.top > 0, `menu maior que a tela rola por dentro (desceu ${scroll.top}px)`);
 await page.locator('.sidebar [data-route="vitrine"]').tap();
-await page.waitForSelector('.vit-card');
+await page.waitForSelector('.vit-group');   // "Todos": seções por categoria (fechadas)
+// abre em "Todos": o cadastro inteiro (com ou sem preço/foto), não só o que veio de pedidos
+const all = await q(`select count(*)::int n from public.products where active`);
+ok(await page.locator('[data-filter="todos"][aria-pressed="true"]').count() === 1, 'abre em "Todos"');
+ok(await page.locator('.vit-card').count() === all[0].n, `"Todos" mostra os ${all[0].n} modelos do cadastro (${await page.locator('.vit-card').count()})`);
+ok(await page.locator('.vit-card', { has: page.locator('.vit-name', { hasText: /^iPhone 18 Pro Max$/ }) }).locator('[data-sell]').count() === 1, 'modelo sem foto e sem preço (iPhone 18 Pro Max) também aparece, com "Pôr à venda"');
+// separado por categoria: em "Todos" as seções abrem fechadas; tocar abre (e lembra)
+const groups = await page.locator('.vit-group').count();
+ok(groups >= 5 && await page.locator('.vit-group[open]').count() === 0, `"Todos" em seções por categoria, fechadas (${groups})`);
+await page.locator('.vit-group', { hasText: 'iPhone' }).first().locator('summary').tap();
+await page.waitForTimeout(250);
+ok(await page.locator('.vit-group[open]', { hasText: 'iPhone' }).count() === 1, 'tocar em iPhone abre a seção');
+await page.evaluate(() => { location.hash = '#/painel'; });
+await page.waitForTimeout(300);
+await page.evaluate(() => { location.hash = '#/vitrine'; });
+await page.waitForSelector('.vit-group');
+ok(await page.locator('.vit-group[open]', { hasText: 'iPhone' }).count() === 1, 'a seção aberta continua aberta ao voltar');
+await page.locator('[data-filter="mostra"]').tap();
+await page.waitForTimeout(300);
 ok(await page.locator('.vit-card', { hasText: 'iPhone 13' }).count() === 1, 'iPhone 13 na vitrine (No catálogo)');
 await page.screenshot({ path: `${SHOTS}vitrine-tela-grade.png` });
 

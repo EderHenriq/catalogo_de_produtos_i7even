@@ -11,7 +11,7 @@
 // Precisa do Chrome instalado (CHROME_PATH para outro caminho) e do app
 // servido em http://localhost:8765 (python -m http.server 8765 na raiz).
 
-import { chromium, devices } from 'playwright-core';
+import { chromium, webkit, devices } from 'playwright-core';
 import { PGlite } from '@electric-sql/pglite';
 import fs from 'node:fs';
 import { fileURLToPath } from 'node:url';
@@ -76,7 +76,8 @@ export async function createDb() {
  * @param {{device?: string, page?: string}} opts
  */
 export async function open(env, { device = 'iPhone 13', path = '' } = {}) {
-  const browser = await chromium.launch({ executablePath: CHROME });
+  // ENGINE=webkit roda no motor do Safari (npx playwright-core install webkit)
+  const browser = process.env.ENGINE === 'webkit' ? await webkit.launch() : await chromium.launch({ executablePath: CHROME });
   const ctx = await browser.newContext({ ...(device === 'Desktop' ? { viewport: { width: 1366, height: 860 } } : devices[device]) });
   const page = await ctx.newPage();
   const errors = [];

@@ -39,7 +39,9 @@ await env.db.query(`update public.store_settings set catalog_enabled = true, pho
 
 
 // um modelo com 3 fotos na 1ª cor e 2 cores à venda
-const P = (await q(`select p.id, p.color_photos from public.products p join public.product_variants v on v.product_id = p.id where p.show_in_catalog group by p.id having count(distinct v.color) >= 2 limit 1`))[0];
+// sempre o mesmo modelo (um iPhone com duas cores), para o teste não depender da ordem do banco
+const P = (await q(`select p.id, p.color_photos from public.products p join public.product_variants v on v.product_id = p.id
+  where p.show_in_catalog and p.slug like 'iphone%' group by p.id, p.code having count(distinct v.color) >= 2 order by p.code limit 1`))[0];
 const colors = Object.keys(P.color_photos);
 const pp = await open(env, { device: 'Desktop' });
 const extra = [];
@@ -47,8 +49,8 @@ for (let i = 0; i < 2; i++) { const f = await makePng(pp.page, { w: 900, h: 1200
 await pp.browser.close();
 P.color_photos[colors[0]] = [...P.color_photos[colors[0]], ...extra];
 await env.db.query(`update public.products set color_photos = $2 where id = $1`, [P.id, JSON.stringify(P.color_photos)]);
-// a 2ª cor também à venda na mesma capacidade
-await env.db.query(`insert into public.product_variants (product_id, storage, color, condition, price, stock) values ($1, '256GB', $2, 'Seminovo', 3999, 3)`, [P.id, colors[0]]).catch(() => {});
+// a 1ª cor também em 512GB seminovo: trocar a capacidade não muda a cor (nem as fotos)
+await env.db.query(`insert into public.product_variants (product_id, storage, color, condition, price, stock) values ($1, '512GB', $2, 'Seminovo', 4599, 1)`, [P.id, colors[0]]);
 
 let fails = 0;
 const ok2 = (c, m) => { console.log(`${c ? '  ✓' : '  ✗'} ${m}`); if (!c) fails++; };
@@ -83,28 +85,40 @@ for (const device of ['Desktop', 'iPhone 13']) {
   } else {
     ok2(s.arrows === 0, `celular sem setas (${s.arrows})`);
   }
-  // tocar numa opção não faz a folha descer e voltar
-  const y0 = await page.evaluate(() => document.querySelector('.cat-sheet[open] .cat-sheet-panel').getBoundingClientRect().top);
+  // tocar numa opção não faz a folha descer e voltar (nenhuma animação de subida rodando)
+  const panelState = () => page.evaluate(() => {
+    const el = document.querySelector('.cat-sheet[open] .cat-sheet-panel');
+    return { top: Math.round(el.getBoundingClientRect().top), anim: el.getAnimations().filter((a) => a.playState === 'running').length };
+  });
+  const y0 = await panelState();
   await page.locator('.cat-sheet[open] [data-opt="condition"]').first().click();
   await page.waitForTimeout(60);
-  const y1 = await page.evaluate(() => document.querySelector('.cat-sheet[open] .cat-sheet-panel').getBoundingClientRect().top);
-  ok2(Math.abs(y1 - y0) < 2, `trocar opção não faz a ficha pular (${Math.round(y0)} → ${Math.round(y1)})`);
+  const y1 = await panelState();
+  ok2(y1.anim === 0 && (device === 'Desktop' || y1.top === y0.top), `trocar opção não faz a ficha pular (topo ${y0.top} → ${y1.top}, animações ${y1.anim})`);
   await page.waitForTimeout(400);
+  // volta para a 1ª cor, seminovo, 256GB
+  await page.locator(`.cat-sheet[open] [data-opt="color"][data-val="${colors[0]}"]`).click();
+  await page.waitForTimeout(400);
+  const semi = page.locator('.cat-sheet[open] [data-opt="condition"][data-val="Seminovo"]');
+  if (await semi.count()) { await semi.click(); await page.waitForTimeout(400); }
+  const s256 = page.locator('.cat-sheet[open] [data-opt="storage"][data-val="256GB"]');
+  if (await s256.count()) { await s256.click(); await page.waitForTimeout(400); }
   // trocar capacidade: a galeria (mesmo elemento) fica
   const before = await page.evaluate(() => { window.__gal = document.querySelector('.cat-sheet[open] .cat-sheet-gallery'); return true; });
   const storages = await page.locator('.cat-sheet[open] [data-opt="storage"]').count();
+  ok2(storages > 1, `modelo com duas capacidades (${storages})`);
   if (storages > 1) {
-    await page.locator('.cat-sheet[open] [data-opt="storage"][aria-pressed="false"]').first().click();
+    await page.locator('.cat-sheet[open] [data-opt="storage"][data-val="512GB"]').click();
     await page.waitForTimeout(100);
     const same = await page.evaluate(() => window.__gal === document.querySelector('.cat-sheet[open] .cat-sheet-gallery'));
     const tick = await page.evaluate(() => !!document.querySelector('.cat-sheet[open] .cat-price.cat-tick'));
     ok2(same, 'trocar capacidade mantém a galeria (sem recarregar a foto)');
     console.log(`    preço com fade curto: ${tick}`);
-    await page.locator('.cat-sheet[open] [data-opt="storage"][aria-pressed="false"]').first().click();
+    await page.locator('.cat-sheet[open] [data-opt="storage"][data-val="256GB"]').click();
     await page.waitForTimeout(500);
   }
   // trocar a cor: foto antiga por cima e some em ~0,2s
-  const other = colors.find((c) => c !== s.color) || colors[1];
+  const other = colors[1];
   await page.locator(`.cat-sheet[open] [data-opt="color"][data-val="${other}"]`).click();
   const t0 = Date.now();
   let sawGhost = false, gone = -1;

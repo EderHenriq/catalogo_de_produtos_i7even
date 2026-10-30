@@ -2,9 +2,10 @@
  * Vitrine: o que o cliente vê no catálogo, do jeito que ele vê.
  *
  *   Grade   os modelos com a foto do cartão, o preço e a chave "No
- *           catálogo". Atalhos: no catálogo · escondidos · sem foto ·
- *           com foto e sem preço (os do cadastro/importador prontos para
- *           vender: "Pôr à venda").
+ *           catálogo". Atalhos: todos (o cadastro inteiro - os modelos da
+ *           pasta Imagens, com ou sem preço, com ou sem foto) · no catálogo ·
+ *           escondidos · sem foto · com foto e sem preço (os do
+ *           cadastro/importador prontos para vender: "Pôr à venda").
  *   Ficha   qual foto vai no cartão (a cor que aparece primeiro), as fotos
  *           de cada cor na ordem (toque nas fotos na ordem que quiser), a
  *           ordem das cores, cada versão à venda liga/desliga e o destaque.
@@ -23,6 +24,7 @@ import { matches, catalogUrl, pref, setPref, openColorPhotos, moneyHTML } from '
 import { openQuickProduct } from './quick-product.js';
 
 const FILTERS = [
+  { key: 'todos', label: 'Todos', hint: 'Todos os modelos do cadastro (os da pasta Imagens), com ou sem preço e foto. Toque para organizar as fotos; "Pôr à venda" dá o preço.' },
   { key: 'mostra', label: 'No catálogo', hint: 'O que o cliente vê agora, na ordem do catálogo. Toque no produto para escolher a foto do cartão e a ordem das fotos.' },
   { key: 'escondidos', label: 'Escondidos', hint: 'Têm preço, mas não aparecem no catálogo. Ligue a chave para mostrar.' },
   { key: 'semfoto', label: 'Sem foto', hint: 'Aparecem sem foto - vendem bem menos. Toque para pôr as fotos.' },
@@ -86,8 +88,9 @@ function coverChoice(p) {
 /* =================================================================== */
 
 export function mount(host, ctx) {
-  const st = { q: '', filter: pref('vitrine.filter', 'mostra'), cat: '' };
-  if (!FILTERS.some((f) => f.key === st.filter)) st.filter = 'mostra';
+  // abre em "Todos": o cadastro inteiro, não só o que já tem preço
+  const st = { q: '', filter: pref('vitrine.view', 'todos'), cat: '' };
+  if (!FILTERS.some((f) => f.key === st.filter)) st.filter = 'todos';
 
   host.innerHTML = `
     <div class="view">
@@ -116,6 +119,7 @@ export function mount(host, ctx) {
     const info = sellInfo(p);
     const sells = info.sellable.length > 0;
     switch (key) {
+      case 'todos': return true;
       case 'mostra': return info.visible;
       case 'escondidos': return sells && !info.visible;
       case 'semfoto': return info.visible && !allPhotos(p).size;
@@ -130,8 +134,10 @@ export function mount(host, ctx) {
       && (!st.cat || p.categoryId === st.cat)
       && (!st.q || matches(st.q, p.name, p.brand, Data.category(p.categoryId)?.name, colorsOf(p).join(' '))))
       .map((p) => ({ p, info: sellInfo(p) }))
-      // a ordem do catálogo: pronta entrega, destaque, mais novo, nome
-      .sort((a, b) => Number(b.info.ready) - Number(a.info.ready) || Number(b.p.featured) - Number(a.p.featured)
+      // "Todos": por categoria (a ordem de Categorias); dentro dela, a ordem do
+      // catálogo: pronta entrega, destaque, mais novo, nome
+      .sort((a, b) => (st.filter === 'todos' ? (catOrder.get(a.p.categoryId) ?? 99) - (catOrder.get(b.p.categoryId) ?? 99) : 0)
+        || Number(b.info.ready) - Number(a.info.ready) || Number(b.p.featured) - Number(a.p.featured)
         || (st.filter === 'prontos' ? (catOrder.get(a.p.categoryId) ?? 99) - (catOrder.get(b.p.categoryId) ?? 99) : 0)
         || (b.p.year || 0) - (a.p.year || 0) || a.p.name.localeCompare(b.p.name, 'pt-BR', { numeric: true }));
   }
@@ -186,6 +192,7 @@ export function mount(host, ctx) {
       ${cats.map((c) => `<button type="button" class="chip sm" data-cat="${esc(c.id)}" aria-pressed="${c.id === st.cat}"><span aria-hidden="true">${esc(c.emoji || '')}</span>${esc(c.name)}</button>`).join('')}` : '';
     if (!items.length) {
       const empty = {
+        todos: { emoji: '🗂️', title: 'Nenhum modelo cadastrado', text: 'Importe a pasta de fotos (no computador) ou cadastre em Produtos.' },
         mostra: { emoji: '🛍️', title: 'Nada na vitrine ainda', text: 'Produto com preço (pronta entrega ou encomenda) aparece aqui. Adicione pelo Estoque ou cole a lista de encomenda no Catálogo.' },
         escondidos: { emoji: '👀', title: 'Nenhum produto escondido', text: 'Tudo que tem preço está aparecendo no catálogo.' },
         semfoto: { emoji: '📸', title: 'Todos com foto', text: 'Cada produto à mostra tem pelo menos uma foto.' },
@@ -194,13 +201,37 @@ export function mount(host, ctx) {
       $grid.innerHTML = `<div class="card">${emptyState(empty)}</div>`;
       return;
     }
-    $grid.innerHTML = `<div class="vit-grid">${items.map(cardHTML).join('')}</div>`;
+    // Sem categoria escolhida: uma seção por categoria (na ordem de Categorias),
+    // que abre/fecha com um toque - a tela não vira um mural de 100 cartões.
+    const groups = new Map();
+    if (!st.cat) {
+      for (const c of Data.categories()) groups.set(c.id, []);
+      for (const it of items) { const k = groups.has(it.p.categoryId) ? it.p.categoryId : ''; if (!groups.has(k)) groups.set(k, []); groups.get(k).push(it); }
+    }
+    const sections = [...groups].filter(([, group]) => group.length);
+    if (sections.length < 2) { $grid.innerHTML = `<div class="vit-grid">${items.map(cardHTML).join('')}</div>`; return; }
+    // "Todos" (o cadastro inteiro) abre com as categorias fechadas: uma lista
+    // limpa de categorias, abre a que quiser. Nos outros atalhos, abertas.
+    const mem = groupMemory();
+    $grid.innerHTML = sections.map(([cid, group]) => {
+      const c = cid ? Data.category(cid) : null;
+      return `
+        <details class="vit-group" data-group="${esc(cid)}" ${mem.isOpen(cid) ? 'open' : ''}>
+          <summary class="vit-group-head">
+            <span class="vit-group-emoji" aria-hidden="true">${esc(c?.emoji || '🗂️')}</span>
+            <span class="vit-group-name">${esc(c?.name || 'Sem categoria')}</span>
+            <span class="vit-group-n">${group.length}</span>
+            <span class="summary-chev">${icon('chevronDown')}</span>
+          </summary>
+          <div class="vit-grid">${group.map(cardHTML).join('')}</div>
+        </details>`;
+    }).join('');
   }
 
   host.addEventListener('click', (e) => {
     const t = e.target;
     const f = t.closest('[data-filter]');
-    if (f) { st.filter = f.dataset.filter; setPref('vitrine.filter', st.filter); render(); return; }
+    if (f) { st.filter = f.dataset.filter; setPref('vitrine.view', st.filter); render(); return; }
     const c = t.closest('[data-cat]');
     if (c) { st.cat = c.dataset.cat; render(); return; }
     const o = t.closest('[data-open]');
@@ -213,6 +244,22 @@ export function mount(host, ctx) {
         .catch((err) => toastError('Não foi possível abrir', friendlyError(err)));
     }
   });
+  /** Quais categorias ficam abertas: em "Todos" lembra as abertas; nos outros, as fechadas. */
+  function groupMemory() {
+    const todos = st.filter === 'todos';
+    const key = todos ? 'vitrine.opened' : 'vitrine.closed';
+    const set = new Set(pref(key, []));
+    return {
+      isOpen: (cid) => (todos ? set.has(cid) : !set.has(cid)),
+      set: (cid, open) => { if (open === todos) set.add(cid); else set.delete(cid); setPref(key, [...set]); },
+    };
+  }
+  // abriu/fechou uma categoria: lembra (o evento toggle não sobe; captura)
+  host.addEventListener('toggle', (e) => {
+    const g = e.target.closest?.('[data-group]');
+    if (g) groupMemory().set(g.dataset.group, g.open);
+  }, true);
+
   host.addEventListener('change', async (e) => {
     const sw = e.target.closest('[data-show]');
     if (!sw) return;

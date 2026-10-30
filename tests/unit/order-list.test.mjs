@@ -219,6 +219,9 @@ test('lista real da loja (blocos: modelo / 💰 preço / ▫️ cores)', async (
   assert.ok(all.includes('iphone-14-pro-max|128GB|Preto-espacial|Seminovo|3497'), 'preto num 14 Pro Max = preto-espacial');
   assert.ok(all.includes('iphone-16-pro|128GB|Titânio deserto|Seminovo|4397'));
   assert.ok(all.includes('iphone-17-pro-max|512GB|Prateado|Seminovo|7597'));
+  // iPhone 17: o verde da lista é a cor "Vapor" do cadastro (não vira cor nova)
+  const v17 = rows.find((r) => r.product.id === 'iphone-17');
+  assert.ok(v17 && v17.color === 'Vapor' && !v17.newColor, `verde no iPhone 17 = Vapor (${v17?.color})`);
   // seção LACRADOS / SEMINOVOS vale para os blocos de baixo
   assert.ok(rows.filter((r) => r.product.id === 'iphone-18-pro-max').every((r) => r.condition === 'Lacrado'));
   // cor que o cadastro não tem entra como nova (não some, não vira "todas as cores")
@@ -232,6 +235,16 @@ test('lista real da loja (blocos: modelo / 💰 preço / ▫️ cores)', async (
   assert.deepEqual(missing[0].colors, ['Rosa']);
   assert.equal(missing[0].price, 3547);
   assert.equal(unknown.length, 0, unknown.map((u) => u.line).join(' | '));
+});
+
+test('iPhone 17: verde/sálvia = Vapor, azul = Névoa, lilás = Lavanda', () => {
+  const { rows } = read(`iPhone 17 256GB verde 4.697
+iPhone 17 256GB salvia 4.697
+iPhone 17 256GB azul 4.697
+iPhone 17 512GB lilás 5.197
+iPhone 17 256GB vapor 4.697`);
+  assert.deepEqual(rows.map((r) => r.color), ['Vapor', 'Vapor', 'Névoa', 'Lavanda', 'Vapor']);
+  assert.ok(rows.every((r) => !r.newColor));
 });
 
 test('grudado, PS5 e quantidade', () => {

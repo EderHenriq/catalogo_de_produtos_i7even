@@ -114,7 +114,13 @@ for (const device of DEVICES) {
   await step('estoque-add', async () => { await go('estoque'); await page.locator('button:has-text("Adicionar")').first().tap(); await page.waitForTimeout(500); });
   await step('produto', async () => { await go('produtos'); await page.locator('[data-open]').first().tap(); await page.waitForTimeout(500); });
   await step('entrada-nova', async () => { await go('entradas'); await page.locator('button:has-text("Nova entrada")').first().tap(); await page.waitForTimeout(500); });
-  await step('vitrine-item', async () => { await go('vitrine'); await page.locator('.vit-name').first().tap(); await page.waitForTimeout(500); });
+  await step('vitrine-item', async () => {
+    await go('vitrine');
+    if (await page.locator('.vit-group:not([open])').count()) await page.locator('.vit-group:not([open]) > summary').first().tap();
+    await page.waitForTimeout(300);
+    await page.locator('.vit-group[open] .vit-name, .vit-grid .vit-name').first().tap();
+    await page.waitForTimeout(500);
+  });
   await step('categoria', async () => { await go('categorias'); await page.locator('.view button:visible', { hasText: 'Categoria' }).first().tap(); await page.waitForTimeout(400); });
   console.log(errors.length ? `  ERROS JS: ${errors.join(' | ')}` : '  sem erros de JS');
   await browser.close();

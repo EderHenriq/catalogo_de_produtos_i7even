@@ -261,6 +261,9 @@ export function openPhotoImport({ onDone } = {}) {
       }
       // modelos (cria o que falta, depois capa + fotos por cor numa gravação só)
       const byModel = new Map();
+      // duas pastas no mesmo produto (iPad de 11" e de 13"): as fotos se somam,
+      // a segunda pasta não apaga o que a primeira acabou de gravar
+      const media = new Map();
       for (const j of jobs.filter((x) => x.kind !== 'cat')) {
         if (!byModel.has(j.m)) byModel.set(j.m, []);
         byModel.get(j.m).push(j);
@@ -272,14 +275,19 @@ export function openPhotoImport({ onDone } = {}) {
             p = await Data.saveProduct({ name: m.folder, categoryId: m.category?.id || null, colors: m.colors.map((c) => c.color),
               storages: [], tracksSerial: !!m.category?.tracksSerial, showInCatalog: true, active: true, needsReview: true });
           }
-          const colorPhotos = { ...(p.colorPhotos || {}) };
-          const colors = [...(p.colors || [])];
+          const cur = media.get(p.id) || { colorPhotos: { ...(p.colorPhotos || {}) }, colors: [...(p.colors || [])], fresh: new Set() };
+          media.set(p.id, cur);
+          const { colorPhotos, colors } = cur;
           let imageUrl;
           for (const j of list) {
             if (j.kind === 'cover') { const u = await up(m.cover); if (u) imageUrl = u; continue; }
             const urls = [];
             for (const f of j.files) { const u = await up(f); if (u) urls.push(u); }
-            if (urls.length) colorPhotos[j.col.color] = j.append ? [...new Set([...(colorPhotos[j.col.color] || []), ...urls])] : [...new Set(urls)];
+            if (urls.length) {
+              const add = j.append || cur.fresh.has(j.col.color);
+              colorPhotos[j.col.color] = add ? [...new Set([...(colorPhotos[j.col.color] || []), ...urls])] : [...new Set(urls)];
+              cur.fresh.add(j.col.color);
+            }
             if (!colors.includes(j.col.color)) colors.push(j.col.color);
           }
           await Data.patchProductMedia(p.id, { imageUrl, colorPhotos, colors }, { reloadAfter: false });

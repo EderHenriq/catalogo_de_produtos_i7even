@@ -12,8 +12,10 @@
  * "categoria*" ou "capa*" dentro da pasta do modelo também vira a capa dele.
  * O número na frente da categoria ("01_") é só para ordenar. Os nomes não
  * precisam ser idênticos ao cadastro: "Apple Watch SE (2a ger)" acha
- * "Apple Watch SE (2ª ger.)", "MacBook Pro 14 M1 Pro-Max" acha
- * 'MacBook Pro 14" M1 Pro/Max', "Azul" acha "Titânio azul".
+ * "Apple Watch SE (2ª ger.)", "AirPods Pro (2a ger)" acha "AirPods Pro 2",
+ * "MacBook Pro 14 M1 Pro-Max" acha 'MacBook Pro 14" M1 Pro/Max',
+ * "iPad Pro 13 M4" acha 'iPad Pro M4 (11" / 13")', "YSL Y" acha
+ * "Yves Saint Laurent Y", "Azul" acha "Titânio azul".
  */
 
 const IMG = /\.(webp|jpe?g|png|avif)$/i;
@@ -26,8 +28,20 @@ export function normName(s) {
     .replace(/[ªº]/g, 'a').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
 }
 
+/** Sigla que a pasta usa e o cadastro escreve por extenso. */
+const ALIAS = [[/\bysl\b/g, 'yves saint laurent']];
+
 export function tokensOf(s) {
-  return [...new Set(normName(s).split(' ').filter((w) => w && !STOP.has(w)))];
+  let n = normName(s);
+  for (const [re, to] of ALIAS) n = n.replace(re, to);
+  // "2a" (2ª geração) conta como o número 2
+  return [...new Set(n.split(' ').map((w) => w.replace(/^(\d+)a$/, '$1')).filter((w) => w && !STOP.has(w)))];
+}
+
+/** 'iPad Air M2 (11" / 13")' também vale como "iPad Air M2 11" e "iPad Air M2 13" (pasta de um tamanho). */
+function nameVariants(name) {
+  const m = /\(([^()]*\/[^()]*)\)/.exec(name);
+  return m ? [name, ...m[1].split('/').map((part) => name.replace(m[0], part))] : [name];
 }
 
 const stripOrder = (folder) => String(folder).replace(/^\s*\d+\s*[_\-.\s]\s*/, '');
@@ -41,21 +55,26 @@ export function matchCategory(folder, categories) {
     || null;
 }
 
-/** Pasta do modelo → modelo do cadastro (mesmos números; ≥ 75% das palavras). */
-export function matchModel(folder, products) {
+/** Pasta do modelo → modelo do cadastro (mesmos números; ≥ `min` das palavras). */
+export function matchModel(folder, products, min = 0.75) {
   const ft = tokensOf(folder);
   if (!ft.length) return null;
   const nums = (ts) => ts.filter((t) => /\d/.test(t)).sort().join('|');
   let best = null;
   for (const p of products) {
-    const pt = tokensOf(p.name);
-    if (!pt.length || nums(pt) !== nums(ft)) continue;
-    const inter = ft.filter((t) => pt.includes(t)).length;
-    const score = inter / Math.max(ft.length, pt.length);
-    if (score >= 0.75 && (!best || score > best.score || (score === best.score && p.name.length < best.p.name.length))) best = { p, score };
+    for (const name of nameVariants(p.name)) {
+      const pt = tokensOf(name);
+      if (!pt.length || nums(pt) !== nums(ft)) continue;
+      const inter = ft.filter((t) => pt.includes(t)).length;
+      const score = inter / Math.max(ft.length, pt.length);
+      if (score >= min && (!best || score > best.score || (score === best.score && p.name.length < best.p.name.length))) best = { p, score };
+    }
   }
   return best?.p || null;
 }
+
+/** Nome comum da cor → nome da Apple no cadastro (iPhone 17: verde = "Vapor", azul = "Névoa"). */
+const COLOR_SYN = [['verde', ['vapor', 'salvia']], ['salvia', ['vapor']], ['azul', ['nevoa']]];
 
 /** Pasta da cor → cor do modelo; sem par, a cor é nova (nome da pasta). */
 export function matchColor(folder, colors = []) {
@@ -67,6 +86,9 @@ export function matchColor(folder, colors = []) {
   const part = list.find((c) => words(c).join(' ') === f) || list.find((c) => words(c).includes(f))
     || list.find((c) => f.split(' ').includes(words(c)[0]) && words(c).length === 1);
   if (part) return { color: part, isNew: false };
+  const syn = COLOR_SYN.find(([w]) => w === f)?.[1] || [];
+  const viaSyn = list.find((c) => syn.includes(normName(c)));
+  if (viaSyn) return { color: viaSyn, isNew: false };
   // modelo de uma cor só e a pasta chama "Padrão"/"Único": é a cor dele
   if (list.length === 1 && /^(padrao|unico|unica|default|normal)$/.test(f)) return { color: list[0], isNew: false };
   const pretty = String(folder).trim();
@@ -106,7 +128,9 @@ export function planFolder(files, { categories = [], products = [] } = {}) {
     const key = `${catFolder}|${modelFolder}`;
     if (!models.has(key)) {
       const pool = products.filter((p) => !category || p.categoryId === category.id);
-      const product = matchModel(modelFolder, pool) || matchModel(modelFolder, products);
+      // fora da categoria da pasta, só com o nome igual: "iPad Air 13 M2" não pode
+      // cair no 'MacBook Air 13" M2' (fotos do iPad no MacBook)
+      const product = matchModel(modelFolder, pool) || matchModel(modelFolder, products, category ? 1 : 0.75);
       models.set(key, { catFolder, category, folder: modelFolder, product, cover: null, colors: new Map() });
     }
     const m = models.get(key);

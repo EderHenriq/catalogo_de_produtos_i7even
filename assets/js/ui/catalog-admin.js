@@ -273,17 +273,18 @@ export function mount(host, ctx) {
   function offersHTML() {
     const offers = Data.orderOffers();
     const head = `
-      <div class="card offer-intro">
-        <div class="row-between gap-3 wrap">
-          <div class="grow" style="min-width:220px"><div class="strong">Catálogo de encomenda</div>
-            <div class="small dim">Cole a lista que o fornecedor manda no WhatsApp: os modelos e valores são reconhecidos, você ajusta o preço de venda e publica.
-              No catálogo aparecem com o selo "Sob encomenda" e o prazo.</div></div>
-          <button class="btn btn-primary" data-paste-list>${icon('copy')} Colar lista do WhatsApp</button>
+      <div class="card card-pad offer-intro">
+        <span class="offer-intro-ic">${icon('truck')}</span>
+        <div class="offer-intro-text">
+          <h3>Catálogo de encomenda</h3>
+          <p class="small dim">Cole a lista que o fornecedor manda no WhatsApp: ela puxa os modelos da Vitrine e entra como <b>sob encomenda</b>, com o prazo.
+            Você confere o preço de venda e publica. O que você tem na loja entra pelo Estoque, em pronta entrega.</p>
         </div>
+        <button class="btn btn-primary" data-paste-list>${icon('copy')} Colar lista do WhatsApp</button>
       </div>`;
     if (!offers.length) {
-      return head + `<div class="card">${emptyState({ emoji: '📦', title: 'Nenhuma oferta de encomenda',
-        text: 'Toque em "Colar lista do WhatsApp". Também dá para ligar a encomenda numa variação em Produtos.' })}</div>`;
+      return `<div class="col gap-4">${head}<div class="card">${emptyState({ emoji: '📦', title: 'Nenhuma oferta de encomenda',
+        text: 'Toque em "Colar lista do WhatsApp". Também dá para ligar a encomenda numa variação em Produtos.' })}</div></div>`;
     }
     const groups = new Map();
     for (const v of offers) {
@@ -292,7 +293,7 @@ export function mount(host, ctx) {
       groups.get(k).push(v);
     }
     const old = Date.now() - 7 * 86400000;
-    return head + [...groups.entries()].sort((a, b) => a[0].localeCompare(b[0], 'pt-BR')).map(([sup, list]) => {
+    return `<div class="col gap-4">${head}` + [...groups.entries()].sort((a, b) => a[0].localeCompare(b[0], 'pt-BR')).map(([sup, list]) => {
       list.sort((a, b) => Data.variantTitle(a).localeCompare(Data.variantTitle(b), 'pt-BR', { numeric: true }));
       const last = Math.max(...list.map((v) => Date.parse(v.orderUpdatedAt) || 0));
       const stale = last && last < old;
@@ -314,7 +315,9 @@ export function mount(host, ctx) {
                   ${productThumb(p, 'sm', v)}
                   <button type="button" class="m-main link-like" data-open-product="${esc(p.id)}">
                     <span class="m-title">${esc(Data.variantTitle(v))}</span>
-                    <span class="m-sub">${v.orderLead ? `${esc(v.orderLead)} · ` : ''}${v.orderCost > 0 ? `<span class="money-sensitive">custo ${esc(money(v.orderCost))}${margin !== null ? ` · ${margin}%` : ''}</span>` : ''}${v.stock > 0 ? ' · <span class="tone-green">tem pronta entrega</span>' : ''}</span>
+                    <span class="m-sub">${[v.orderLead ? esc(v.orderLead) : '',
+                    v.orderCost > 0 ? `<span class="money-sensitive">custo ${esc(money(v.orderCost))}${margin !== null ? ` · ${margin}%` : ''}</span>` : '',
+                    v.stock > 0 ? '<span class="tone-green">tem pronta entrega</span>' : ''].filter(Boolean).join(' · ')}</span>
                   </button>
                   <div class="money-input offer-price"><input class="input" data-offer-price="${esc(v.id)}" inputmode="numeric" autocomplete="off" value="${esc(moneyInputValue(v.orderPrice))}" aria-label="Valor de venda na encomenda"></div>
                   <button class="icon-btn" data-offer-off="${esc(v.id)}" aria-label="Tirar da encomenda" title="Tirar da encomenda">${icon('x')}</button>
@@ -322,7 +325,7 @@ export function mount(host, ctx) {
             }).join('')}
           </div>
         </div>`;
-    }).join('');
+    }).join('') + '</div>';
   }
 
   /* ------------------------------------------------------------- regras -- */

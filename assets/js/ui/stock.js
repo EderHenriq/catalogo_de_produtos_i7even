@@ -57,7 +57,6 @@ export function mount(host, ctx) {
           <p class="small dim" data-count></p>
         </div>
         <div class="row gap-2 wrap">
-          <button class="btn hide-mobile" data-olist title="Colar a lista do WhatsApp">${icon('copy')}<span>Lista do WhatsApp</span></button>
           <button class="btn hide-mobile" data-go-vitrine title="O que aparece no catálogo e a ordem das fotos">${icon('image')}<span>Vitrine</span></button>
           <button class="btn only-mobile" data-more-actions>${icon('more')}<span>Mais</span></button>
           <button class="btn btn-primary" data-add>${icon('plus')} Adicionar</button>
@@ -197,12 +196,10 @@ export function mount(host, ctx) {
   host.addEventListener('click', (e) => {
     const t = e.target;
     if (t.closest('[data-add]')) { openQuickProduct({ mode: 'pronta', categoryId: st.cat || null, onDone: render }); return; }
-    if (t.closest('[data-olist]')) { import('./order-list-import.js').then((m) => m.openOrderListImport({ onDone: render })); return; }
     if (t.closest('[data-go-vitrine]')) { ctx?.go?.('vitrine'); return; }
     const more = t.closest('[data-more-actions]');
     if (more) {
       openMenu(more, [
-        { label: 'Colar lista do WhatsApp', icon: 'copy', onSelect: () => host.querySelector('[data-olist]')?.click() },
         { label: 'Vitrine: fotos do catálogo', icon: 'image', onSelect: () => ctx?.go?.('vitrine') },
         { label: 'Todos os modelos (Produtos)', icon: 'box', onSelect: () => ctx?.go?.('produtos') },
       ]);

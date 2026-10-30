@@ -57,7 +57,7 @@ export function mount(host, ctx) {
         </div>
         <div class="row gap-2 wrap">
           <button class="btn hide-mobile" data-export>${icon('download')}<span>Exportar</span></button>
-          <button class="btn hide-mobile" data-olist title="Colar a lista do WhatsApp (pronta entrega ou encomenda)">${icon('copy')}<span>Lista do WhatsApp</span></button>
+          <button class="btn hide-mobile" data-olist title="Colar a lista do fornecedor no WhatsApp (sob encomenda)">${icon('copy')}<span>Lista do WhatsApp</span></button>
           <button class="btn hide-mobile" data-photo-import title="Importar pasta de fotos (no computador)">${icon('image')}<span>Fotos</span></button>
           <button class="btn hide-mobile" data-entry title="Entrada de mercadoria">${icon('truck')}<span>Entrada</span></button>
           <button class="btn only-mobile" data-more-actions>${icon('more')}<span>Mais</span></button>

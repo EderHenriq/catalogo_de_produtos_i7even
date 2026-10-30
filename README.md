@@ -36,6 +36,11 @@ de pausar.
    sozinho todo dia às 06:23. Sem os secrets, ele só faz o "sinal de vida"
    (que já impede a pausa) e pula o backup.
 
+**Regra da vitrine (out/2026, sem SQL novo):** a **Vitrine** é o cadastro de
+tudo que a loja vende (abre em "Todos": os modelos da pasta Imagens, com ou sem
+preço e foto). A **lista do WhatsApp** colada só puxa esses modelos e entra
+como **sob encomenda**; **pronta entrega** é o que se cadastra no Estoque.
+
 **Atualização v2.1 (rode de novo `schema.sql` e depois `seed_catalogo.sql`):**
 IMEI e bateria opcionais (a venda separa o aparelho do estoque sozinha);
 lista do WhatsApp em **pronta entrega** (publica com preço e estoque) ou

@@ -1,4 +1,7 @@
 // Ataque SEM login contra o Supabase de verdade: tudo deve ser recusado.
+// Inofensivo mesmo se houvesse brecha: as escritas miram um registro que não
+// existe (id zero) ou mandam dado inválido - o que se confere é a RECUSA por
+// permissão (código 42501), não o efeito.
 // Rodar depois de cada mudança no banco (e antes de divulgar o catálogo):
 //   cd tests && npm run test:security
 // Opcional: SITE_URL=https://seu-site.netlify.app npm run test:security
@@ -14,7 +17,10 @@ const ZERO = '00000000-0000-0000-0000-000000000000';
 const exit = async (code) => { await new Promise((r) => setTimeout(r, 300)); process.exit(code); };
 
 let fails = 0;
+const missing = [];   // funções que o app usa e o banco ainda não tem
 const ok = (c, m) => { console.log(c ? '  ✓' : '  ✗', m); if (!c) fails++; };
+/** Recusado por falta de permissão (não por dado inválido nem "nada encontrado"). */
+const denied = (r) => r.status === 401 || r.status === 403 || r.body?.code === '42501';
 const call = async (path, opts = {}) => {
   const r = await fetch(URL_ + path, { ...opts, headers: { ...H, ...(opts.headers || {}) } });
   let body = null;
@@ -38,29 +44,34 @@ for (const t of ['store_settings', 'store_members', 'categories', 'products', 'p
   ok(r.status >= 400 || (Array.isArray(r.body) && r.body.length === 0), `${t}: ${r.status}`);
 }
 
-console.log('2. escrita sem login');
-r = await call('/rest/v1/customers', { method: 'POST', body: JSON.stringify({ name: 'invasor' }) });
-ok(r.status >= 400, `insert customers: ${r.status}`);
-r = await call('/rest/v1/product_variants?price=gt.0', { method: 'PATCH', body: JSON.stringify({ price: 1 }), headers: { Prefer: 'return=representation' } });
-ok(r.status >= 400 || (Array.isArray(r.body) && !r.body.length), `baixar preço das variações: ${r.status}`);
+console.log('2. escrita sem login (miram o id zero: não mexem em nada)');
+r = await call('/rest/v1/customers', { method: 'POST', body: JSON.stringify({ name: null }) });
+ok(denied(r), `insert customers: ${r.status} ${r.body?.code || ''}`);
+r = await call(`/rest/v1/product_variants?id=eq.${ZERO}`, { method: 'PATCH', body: JSON.stringify({ price: 1 }), headers: { Prefer: 'return=representation' } });
+ok(denied(r), `mudar preço das variações: ${r.status} ${r.body?.code || ''}`);
 r = await call('/rest/v1/payments', { method: 'POST', body: JSON.stringify({ order_id: ZERO, amount: -10 }) });
-ok(r.status >= 400, `lançar pagamento/estorno: ${r.status}`);
-r = await call('/rest/v1/order_installments?id=neq.' + ZERO, { method: 'PATCH', body: JSON.stringify({ reminded_at: new Date().toISOString() }), headers: { Prefer: 'return=representation' } });
-ok(r.status >= 400 || (Array.isArray(r.body) && !r.body.length), `mexer nas parcelas do fiado: ${r.status}`);
-r = await call('/rest/v1/store_settings?id=eq.1', { method: 'PATCH', body: JSON.stringify({ phone: '00000000000' }), headers: { Prefer: 'return=representation' } });
-ok(r.status >= 400 || (Array.isArray(r.body) && !r.body.length), `trocar o WhatsApp da loja: ${r.status}`);
+ok(denied(r), `lançar pagamento/estorno: ${r.status} ${r.body?.code || ''}`);
+r = await call(`/rest/v1/order_installments?id=eq.${ZERO}`, { method: 'PATCH', body: JSON.stringify({ reminded_at: new Date().toISOString() }), headers: { Prefer: 'return=representation' } });
+ok(denied(r), `mexer nas parcelas do fiado: ${r.status} ${r.body?.code || ''}`);
+r = await call('/rest/v1/store_settings?id=eq.-1', { method: 'PATCH', body: JSON.stringify({ phone: '00000000000' }), headers: { Prefer: 'return=representation' } });
+ok(denied(r), `trocar o WhatsApp da loja: ${r.status} ${r.body?.code || ''}`);
+r = await call(`/rest/v1/orders?id=eq.${ZERO}`, { method: 'DELETE', headers: { Prefer: 'return=representation' } });
+ok(denied(r), `apagar pedidos: ${r.status} ${r.body?.code || ''}`);
 
-console.log('3. funções da loja sem login');
+console.log('3. funções da loja sem login (argumentos que não acham nada)');
+// _migrate_legacy_orders fica de fora daqui: o tests/db confere que ela é fechada
 for (const [fn, args] of [
-  ['whoami', {}], ['save_order', { p: { customer_name: 'x', items: [] } }], ['set_order_status', { p_id: ZERO, p_status: 'entregue' }],
+  ['whoami', {}], ['save_order', { p: { customer_name: '', items: [] } }], ['set_order_status', { p_id: ZERO, p_status: 'entregue' }],
   ['cancel_order', { p_id: ZERO, p_refund: true }], ['delete_order', { p_id: ZERO }], ['post_purchase', { p: {} }],
   ['cancel_purchase', { p_id: ZERO }], ['adjust_stock', { p_variant: ZERO, p_new_stock: 9 }], ['add_units', { p_variant: ZERO, p_units: [] }],
   ['save_unit', { p: {} }], ['discard_unit', { p_id: ZERO }], ['restore_unit', { p_id: ZERO }], ['set_prices', { p_items: [] }],
   ['delete_variant', { p_id: ZERO }], ['delete_product', { p_id: ZERO }], ['delete_category', { p_id: ZERO }],
-  ['reorder_categories', { p_ids: [] }], ['import_order_list', { p: { items: [] } }], ['_migrate_legacy_orders', {}],
+  ['reorder_categories', { p_ids: [] }], ['import_order_list', { p: { items: [] } }], ['register_trade_in', { p: {} }],
 ]) {
   r = await call(`/rest/v1/rpc/${fn}`, { method: 'POST', body: JSON.stringify(args) });
-  ok(r.status >= 400, `${fn}: ${r.status}`);
+  // 404: a função nem existe no banco (fechada, mas o banco está atrasado)
+  if (r.status === 404) { missing.push(fn); console.log(`  ! ${fn}: não existe no banco - rode o supabase/schema.sql`); continue; }
+  ok(denied(r), `${fn}: ${r.status} ${r.body?.code || ''}`);
 }
 
 console.log('4. catálogo público');
@@ -92,5 +103,6 @@ if (process.env.SITE_URL) {
   }
 }
 
+if (missing.length) console.log(`\n! banco atrasado: ${missing.join(', ')} não existe - rode o supabase/schema.sql no SQL Editor do Supabase.`);
 console.log(fails ? `\n${fails} falha(s)` : '\ntudo recusado como deveria');
 await exit(fails ? 1 : 0);

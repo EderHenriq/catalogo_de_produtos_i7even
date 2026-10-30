@@ -188,7 +188,8 @@ const COLOR_ALIAS = [
 
 /*
  * Sinônimos: usados só quando o modelo NÃO tem a cor com essa palavra.
- * "preto" num iPhone 13 é "Meia-noite"; num 14 Pro, "Preto-espacial".
+ * "preto" num iPhone 13 é "Meia-noite"; num 14 Pro, "Preto-espacial"; no
+ * iPhone 17 o verde (sálvia) se chama "Vapor" e o azul, "Névoa".
  */
 const COLOR_SYNONYMS = [
   ['preto', ['preto', 'meia noite', 'preto espacial', 'titanio preto', 'grafite']],
@@ -199,8 +200,9 @@ const COLOR_SYNONYMS = [
   ['red', ['product red', 'red', 'vermelho']],
   ['lilas', ['lilas', 'lavanda', 'roxo']],
   ['lavanda', ['lavanda', 'lilas', 'roxo']],
-  ['verde', ['verde', 'salvia', 'verde acinzentado', 'verde alpino']],
-  ['azul', ['azul', 'azul nevoa', 'azul profundo', 'ultramarino', 'azul sierra', 'titanio azul']],
+  ['verde', ['verde', 'salvia', 'vapor', 'verde acinzentado', 'verde alpino']],
+  ['salvia', ['salvia', 'vapor', 'verde']],
+  ['azul', ['azul', 'azul nevoa', 'nevoa', 'azul profundo', 'ultramarino', 'azul sierra', 'titanio azul']],
   ['dourado', ['dourado', 'estelar']],
   ['cinza', ['cinza espacial', 'grafite', 'cinza']],
   ['roxo', ['roxo', 'roxo profundo', 'lavanda']],

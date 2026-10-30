@@ -26,6 +26,23 @@ test('modelo: nomes parecidos, números iguais', () => {
   assert.equal(m('PlayStation 5 Slim'), 'ps5-slim');
   assert.equal(m('Nintendo Switch'), undefined, 'Switch "normal" não vira OLED/Lite');
   assert.equal(m('PlayStation 4 Slim'), undefined);
+  // geração "2a" = número; iPad de dois tamanhos; sigla da marca
+  assert.equal(m('AirPods Pro (2a ger)'), 'airpods-pro-2');
+  assert.equal(m('AirPods Pro (3a ger)'), 'airpods-pro-3');
+  assert.equal(m('AirPods (3a ger)'), 'airpods-3', 'AirPods comum não vira o Pro');
+  assert.equal(m('iPad (10a ger)'), 'ipad-10');
+  assert.equal(m('iPad Pro 13 M4'), byName('iPad Pro M4 (11" / 13")').id);
+  assert.equal(m('iPad Air 11 M2'), byName('iPad Air M2 (11" / 13")').id);
+  assert.equal(m('YSL Y'), byName('Yves Saint Laurent Y').id);
+});
+
+test('pasta da categoria manda: "iPad Air 13 M2" não cai no MacBook Air 13" M2', () => {
+  const plan = planFolder([
+    { path: 'Imagens/04_iPad/iPad Air 13 M2/Cinza/a.webp' },
+    { path: 'Imagens/03_MacBook/MacBook Air 13 M2/Prateado/a.webp' },
+  ], { categories, products });
+  assert.equal(plan.models.find((x) => x.folder === 'iPad Air 13 M2').product?.categoryId, 'ipad');
+  assert.equal(plan.models.find((x) => x.folder === 'MacBook Air 13 M2').product?.categoryId, 'macbook');
 });
 
 test('cor: exata, por palavra, "Padrão" e cor nova', () => {
@@ -33,6 +50,9 @@ test('cor: exata, por palavra, "Padrão" e cor nova', () => {
   assert.deepEqual(matchColor('Azul', byName('iPhone 15 Pro').colors), { color: 'Titânio azul', isNew: false });
   assert.deepEqual(matchColor('Padrao', byName('PlayStation 5 Pro').colors), { color: 'Branco', isNew: false });
   assert.deepEqual(matchColor('Pokemon', byName('Nintendo Switch OLED').colors), { color: 'Pokemon', isNew: true });
+  assert.deepEqual(matchColor('Verde', byName('iPhone 17').colors), { color: 'Vapor', isNew: false }, 'iPhone 17: verde = Vapor');
+  assert.deepEqual(matchColor('Azul', byName('iPhone 17').colors), { color: 'Névoa', isNew: false }, 'iPhone 17: azul = Névoa');
+  assert.deepEqual(matchColor('Verde', byName('iPhone 13').colors), { color: 'Verde', isNew: false }, 'onde existe "Verde", fica Verde');
 });
 
 test('plano: categoria, capa do modelo, fotos por cor e o que fica de fora', () => {

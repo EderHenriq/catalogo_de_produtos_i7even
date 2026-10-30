@@ -1,8 +1,10 @@
 // Dia a dia da loja, de ponta a ponta:
-//  1. cola a lista REAL da loja (pronta entrega) → cria o modelo que falta
-//     (iPhone 17e) → publica: preço, estoque sem IMEI e catálogo na hora;
-//  2. cadastro rápido: PS5 Slim com leitor × digital, 1TB, 2 de cada;
-//  3. o cliente vê tudo no catálogo (pronta entrega).
+//  1. cola a lista do WhatsApp → vira SOB ENCOMENDA dos modelos da Vitrine
+//     (sem opção de pronta entrega, sem mexer no estoque); o modelo que falta
+//     (iPhone 17e) é cadastrado na vitrine com um toque;
+//  2. cadastro rápido: PS5 Slim com leitor × digital, 1TB, 2 de cada - é ele
+//     que vai para a pronta entrega;
+//  3. o cliente vê tudo no catálogo (encomenda e pronta entrega).
 import fs from 'node:fs';
 import { createDb, open, SHOTS, audit } from './harness.mjs';
 
@@ -28,7 +30,7 @@ const waitDb = async (sql, test, ms = 8000) => {
 };
 await page.waitForSelector('.app');
 
-console.log('1. lista real da loja → pronta entrega');
+console.log('1. lista do WhatsApp → sob encomenda dos modelos da vitrine');
 await page.evaluate(() => { location.hash = '#/produtos'; });
 await page.waitForTimeout(300);
 // celular: "Colar lista do WhatsApp" fica no botão Mais (com o nome escrito)
@@ -40,14 +42,14 @@ else {
   await tap(page.locator('.menu button', { hasText: 'Colar lista do WhatsApp' }));
 }
 await page.waitForSelector('#ol-text');
-ok(await top().locator('[data-mode="pronta"][aria-checked="true"]').count() === 1, 'abre em "Pronta entrega"');
+ok(await top().locator('[data-mode="pronta"]').count() === 0, 'sem opção "pronta entrega": a lista colada é sob encomenda');
 await top().locator('#ol-text').fill(LIST);
 await shot('01-colar');
 await auditNow('colar-lista');
 await tap(top().locator('[data-read]'));
 await page.waitForSelector('.olist-row');
 ok(await top().locator('.olist-row').count() === 36, `36 ofertas lidas (${await top().locator('.olist-row').count()})`);
-ok(await top().locator('.olist-miss-row').count() === 1 && (await top().locator('.olist-miss-row').innerText()).includes('iPhone 17e'), 'iPhone 17e aparece para "Criar modelo"');
+ok(await top().locator('.olist-miss-row').count() === 1 && (await top().locator('.olist-miss-row').innerText()).includes('iPhone 17e'), 'iPhone 17e aparece para "Cadastrar na vitrine"');
 ok((await top().locator('.olist-row', { hasText: 'iPhone 18 Pro Max' }).first().innerText()).includes('cor nova') || (await top().locator('.olist-rows').innerText()).includes('cor nova'), 'Burgundy entra como cor nova');
 await tap(top().locator('[data-create]'));
 await page.waitForSelector('#cm-name');
@@ -65,11 +67,13 @@ ok((await top().innerText()).includes('catálogo está fechado'), 'avisa que o c
 await tap(top().locator('[data-confirm]'));
 let r = await waitDb(`select catalog_enabled from public.store_settings where id = 1`, (x) => x[0].catalog_enabled);
 ok(r[0].catalog_enabled, 'catálogo aberto pelo aviso');
-r = await one(`select count(*)::int n from public.units where status = 'estoque' and serial is null`);
-ok(r.n === 37, `37 aparelhos sem IMEI no estoque (${r.n})`);
-r = await one(`select v.price::float p, v.stock, v.condition from public.product_variants v join public.products p on p.id = v.product_id
+r = await one(`select count(*)::int n from public.units`);
+ok(r.n === 0, `lista colada não põe nada no estoque (${r.n} aparelhos)`);
+r = await one(`select v.on_order, v.order_price::float op, v.stock, v.condition from public.product_variants v join public.products p on p.id = v.product_id
                where p.slug = 'iphone-14' and v.storage = '128GB' and v.color = '(PRODUCT)RED'`);
-ok(r?.p === 2297 && r.stock === 1 && r.condition === 'Seminovo', 'iPhone 14 128GB (PRODUCT)RED seminovo: R$ 2.297, 1 em estoque');
+ok(r?.on_order === true && r.op > 0 && r.stock === 0 && r.condition === 'Seminovo', `iPhone 14 128GB (PRODUCT)RED seminovo: sob encomenda, sem estoque (${JSON.stringify(r)})`);
+r = await one(`select active from public.products where name = 'iPhone 17e'`);
+ok(r?.active === true, 'iPhone 17e cadastrado na vitrine');
 r = await one(`select count(*)::int n from public.product_variants v join public.products p on p.id = v.product_id where p.slug = 'iphone-18-pro-max' and v.color = 'Burgundy'`);
 ok(r.n === 1, 'cor nova Burgundy criada no iPhone 18 Pro Max');
 
@@ -106,7 +110,8 @@ const c = await open(env, { device: DEVICE, path: 'catalogo.html' });
 await c.page.waitForSelector('.cat-card');
 const n = await c.page.locator('.cat-card').count();
 ok(n === 17, `catálogo com os 16 modelos da lista + o PS5 (${n})`);
-ok(await c.page.locator('.cat-card', { hasText: 'PlayStation 5 Slim' }).count() === 1, 'PS5 Slim no catálogo');
+ok(await c.page.locator('.cat-card', { hasText: 'PlayStation 5 Slim' }).locator('.cat-card-avail.is-ready').count() === 1, 'PS5 Slim (cadastrado) em pronta entrega');
+ok(await c.page.locator('.cat-card', { hasText: 'iPhone 14' }).first().locator('.cat-card-avail.is-order').count() === 1, 'iPhone 14 (lista colada) sob encomenda');
 await (touch ? c.page.locator('.cat-card', { hasText: 'PlayStation 5 Slim' }).tap() : c.page.locator('.cat-card', { hasText: 'PlayStation 5 Slim' }).click());
 await c.page.waitForSelector('.cat-sheet[open] .cat-price');
 ok((await c.page.locator('.cat-sheet[open]').innerText()).includes('Versão'), 'ficha mostra "Versão" (com leitor / digital)');

@@ -406,6 +406,9 @@ dialog.cat-sheet {
   max-height: none;
   background: transparent;
   overflow: hidden;
+  /* clip: a janela não rola nem por foco - no iPhone, o Safari rolava a folha
+     ainda descendo na animação e ela ficava fora do lugar (vão embaixo) */
+  overflow: clip;
 }
 dialog.cat-sheet::backdrop {
   background: rgba(8, 9, 10, .5);

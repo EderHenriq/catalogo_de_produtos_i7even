@@ -509,6 +509,8 @@ function cardHTML(p) {
 }
 
 const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
+// computador (mouse): setas da foto, teclado e foco de abertura no painel
+const finePointer = window.matchMedia('(hover: hover) and (pointer: fine)');
 let revealObserver = null;
 
 /**
@@ -730,7 +732,7 @@ function openProduct(id) {
     const price = dlg.querySelector('.cat-price');
     if (oldPrice && price && price.textContent !== oldPrice && !reduceMotion.matches) price.classList.add('cat-tick');
     // o botão tocado foi redesenhado: o foco volta para a ficha (setas do teclado seguem valendo)
-    if (dlg.open && !dlg.contains(document.activeElement)) dlg.querySelector('.cat-sheet-panel')?.focus({ preventScroll: true });
+    if (finePointer.matches && dlg.open && !dlg.contains(document.activeElement)) dlg.querySelector('.cat-sheet-panel')?.focus({ preventScroll: true });
   }
 
   /** Setas (computador) e teclado: foto anterior/próxima, dando a volta. */
@@ -1003,9 +1005,15 @@ function fillSheet(dlg, html, cls = '') {
   if (!panel) {
     panel = document.createElement('div');
     panel.className = `cat-sheet-panel${cls ? ` ${cls}` : ''}`;
-    // o foco de abertura fica no painel (senão cai no X, que abria com anel azul)
-    panel.tabIndex = -1;
-    panel.setAttribute('autofocus', '');
+    // Computador: o foco de abertura fica no painel (senão cai no X, com anel
+    // azul). No iPhone NÃO: focar o painel fazia o Safari deslocar a tela e a
+    // ficha abria fora do lugar (topo escondido, vão embaixo).
+    if (finePointer.matches) {
+      panel.tabIndex = -1;
+      panel.setAttribute('autofocus', '');
+    }
+    // Safari antigo (sem overflow: clip): se a janela rolou na abertura, volta ao lugar
+    panel.addEventListener('animationend', () => { if (dlg.scrollTop) dlg.scrollTop = 0; }, { once: true });
     dlg.appendChild(panel);
   }
   const top = panel.scrollTop;

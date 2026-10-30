@@ -1,17 +1,17 @@
 /**
- * "Colar lista do WhatsApp": a mensagem vira o catálogo em dois passos.
+ * "Colar lista do WhatsApp": a lista do fornecedor vira SOB ENCOMENDA no
+ * catálogo, puxando os modelos da Vitrine (o cadastro de tudo que a loja
+ * vende). A lista não cria a vitrine nem mexe na pronta entrega: o que a loja
+ * tem na mão entra pelo cadastro (Estoque), como pronta entrega.
  *
- *   1. COLAR - a mensagem e o que ela é:
- *        PRONTA ENTREGA  a lista da própria loja (o que tem para vender agora):
- *                        publica com o preço e o estoque (aparelho sem IMEI);
- *        SOB ENCOMENDA   a lista do fornecedor: oferta com prazo, preço de
- *                        venda = custo + margem (ou o valor da lista).
+ *   1. COLAR - a mensagem, o fornecedor e o prazo; preço de venda = custo +
+ *      margem (ou o valor da lista).
  *   2. CONFERIR - uma linha por oferta: modelo, capacidade, cor (cor que o
- *      cadastro não tem entra como "cor nova"), condição, quantidade e o VALOR
- *      DE VENDA (editável). Modelo que o cadastro não tem aparece com o botão
- *      "Criar modelo" - criou, a lista é lida de novo.
+ *      cadastro não tem entra como "cor nova"), condição e o VALOR DE VENDA
+ *      (editável). Modelo que não está na Vitrine aparece com "Cadastrar na
+ *      vitrine" - cadastrou, a lista é lida de novo.
  *
- * Publicar grava tudo numa transação (import_order_list) e o modelo fica à
+ * Publicar grava tudo numa transação (import_order_list) e a oferta fica à
  * mostra no catálogo na hora. A leitura do texto é do core/order-list.js,
  * coberta por testes com mensagens reais (tests/unit/fixtures).
  */
@@ -37,9 +37,9 @@ iPhone 16 128 preto/azul 3.897
 *SEMINOVOS*
 14 pro 128 roxo 2.997`;
 
-export function openOrderListImport({ onDone, mode: forcedMode } = {}) {
+export function openOrderListImport({ onDone } = {}) {
   const opts = {
-    mode: forcedMode || pref('olist.mode', 'pronta'),        // pronta | encomenda
+    mode: 'encomenda',   // sempre: pronta entrega é o que a loja cadastra no Estoque
     supplier: pref('olist.supplier', ''),
     lead: pref('olist.lead', '7 a 15 dias'),
     condition: pref('olist.condition', 'Lacrado'),
@@ -62,9 +62,9 @@ export function openOrderListImport({ onDone, mode: forcedMode } = {}) {
 
   const modal = openModal({
     title: 'Colar lista do WhatsApp',
-    subtitle: 'A mensagem vira o catálogo: pronta entrega ou sob encomenda',
+    subtitle: 'A lista do fornecedor vira sob encomenda dos modelos da Vitrine',
     size: 'xl',
-    body: '<div data-step></div>',
+    body: '<div class="col gap-4" data-step></div>',
     footer: '<div class="row gap-2 grow" data-foot-left></div><div class="row gap-2" data-foot-right></div>',
     beforeClose: async () => {
       if (step === 1 && !text.trim()) return true;
@@ -82,12 +82,8 @@ export function openOrderListImport({ onDone, mode: forcedMode } = {}) {
     step = 1;
     const enc = opts.mode === 'encomenda';
     $step.innerHTML = `
-      <div class="olist-modes" role="radiogroup" aria-label="O que é esta lista">
-        <button type="button" class="olist-mode" role="radio" data-mode="pronta" aria-checked="${!enc}">
-          ${icon('checkCircle')}<span><b>Pronta entrega</b><small>A lista da loja: o que tenho para vender agora. Sobe com preço e estoque.</small></span></button>
-        <button type="button" class="olist-mode" role="radio" data-mode="encomenda" aria-checked="${enc}">
-          ${icon('truck')}<span><b>Sob encomenda</b><small>A lista do fornecedor: o cliente pede e chega no prazo.</small></span></button>
-      </div>
+      <div class="alert" data-kind="info">${icon('truck')}<div>A lista entra como <b>sob encomenda</b> nos modelos da <b>Vitrine</b>: o cliente pede e chega no prazo.
+        <span class="xs dim block">O que você tem na loja entra pelo Estoque, como pronta entrega.</span></div></div>
       <div class="form-grid">
         <div class="field span-12">
           <label class="label" for="ol-text">Mensagem do WhatsApp</label>
@@ -198,16 +194,16 @@ export function openOrderListImport({ onDone, mode: forcedMode } = {}) {
         <span class="badge no-dot" data-tone="${pronta ? 'green' : 'indigo'}">${pronta ? icon('checkCircle') : icon('truck')} ${pronta ? 'Pronta entrega' : 'Sob encomenda'}</span>
         <span class="badge no-dot" data-tone="blue">${rows.length} ${rows.length === 1 ? 'oferta' : 'ofertas'}${pronta ? ` · ${units} un.` : ''}</span>
         ${doubt ? `<span class="badge no-dot" data-tone="amber">${doubt} para conferir</span>` : ''}
-        ${missing.length ? `<span class="badge no-dot" data-tone="red">${missing.length} ${missing.length === 1 ? 'modelo não cadastrado' : 'modelos não cadastrados'}</span>` : ''}
+        ${missing.length ? `<span class="badge no-dot" data-tone="red">${missing.length} ${missing.length === 1 ? 'modelo fora da vitrine' : 'modelos fora da vitrine'}</span>` : ''}
         ${usd ? `<span class="badge no-dot" data-tone="green">US$ × ${esc(String(opts.rate).replace('.', ','))}</span>` : ''}
       </div>
       ${missing.length ? `
         <div class="olist-missing">
-          <div class="strong small">${icon('alert')} Estes modelos não estão no cadastro. Crie com um toque e eles entram na lista:</div>
+          <div class="strong small">${icon('alert')} Estes modelos não estão na Vitrine. Cadastre com um toque e eles entram na lista:</div>
           ${missing.map((m, i) => `
             <div class="olist-miss-row">
               <span class="grow"><b>${esc(m.name)}</b> <span class="xs dim">${esc([m.storage, m.colors.join(', '), money(m.price)].filter(Boolean).join(' · '))}</span></span>
-              <button type="button" class="btn btn-sm btn-primary" data-create="${i}">${icon('plus')} Criar modelo</button>
+              <button type="button" class="btn btn-sm btn-primary" data-create="${i}">${icon('plus')} Cadastrar na vitrine</button>
             </div>`).join('')}
         </div>` : ''}
       ${priceMode() === 'custo' ? `
@@ -293,8 +289,8 @@ export function openOrderListImport({ onDone, mode: forcedMode } = {}) {
     const cat0 = cats.find((c) => (isPhone ? c.slug === 'iphone' : false)) || cats.find((c) => /iphone/i.test(c.name) && isPhone) || cats[0];
     const storages = [...new Set([m.storage, ...(isPhone ? ['128GB', '256GB', '512GB'] : [])].filter(Boolean))];
     const dlg = openModal({
-      title: 'Criar modelo',
-      subtitle: 'Só o essencial - depois dá para completar',
+      title: 'Cadastrar na vitrine',
+      subtitle: 'Só o essencial - fotos e o resto você completa na Vitrine',
       body: `
         <div class="form-grid">
           <div class="field span-12"><label class="label" for="cm-name">Nome</label>
@@ -331,8 +327,6 @@ export function openOrderListImport({ onDone, mode: forcedMode } = {}) {
 
   modal.panel.addEventListener('click', async (e) => {
     const t = e.target;
-    const md = t.closest('[data-mode]');
-    if (md) { readOptions(); opts.mode = md.dataset.mode; opts.priceMode = ''; renderPaste(); return; }
     const c = t.closest('[data-cond]');
     if (c) { opts.condition = c.dataset.cond; modal.body.querySelectorAll('[data-cond]').forEach((b) => b.setAttribute('aria-pressed', String(b === c))); return; }
     const pm = t.closest('[data-pm]');
