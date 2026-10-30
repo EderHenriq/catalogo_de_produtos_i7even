@@ -668,7 +668,7 @@ button.variant-row:active { transform: scale(.995); }
 .vit-star .icon { width: 13px; height: 13px; fill: currentColor; }
 .vit-body { display: flex; flex-direction: column; gap: 3px; padding: 10px 12px 4px; min-width: 0; }
 /* nome também abre a ficha: área de toque de 36px sem mudar o desenho do cartão */
-.vit-name { padding: 9px 0; margin: -9px 0; border: 0; background: none; color: var(--text); text-align: left; font: 600 var(--fs-md)/1.25 var(--font); letter-spacing: -.01em; cursor: pointer; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.vit-name { padding: 10px 0; margin: -10px 0; border: 0; background: none; color: var(--text); text-align: left; font: 600 var(--fs-md)/1.25 var(--font); letter-spacing: -.01em; cursor: pointer; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .vit-sub { font-size: var(--fs-xs); color: var(--text-2); }
 .vit-colors { font-size: var(--fs-xs); color: var(--text-3); }
 .vit-foot { margin-top: auto; padding: 8px 12px 12px; }

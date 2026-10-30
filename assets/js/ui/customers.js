@@ -164,7 +164,7 @@ export async function openCustomerSheet(id, ctx) {
   if (!c0) return;
   // A ficha mostra a história inteira: busca os pedidos mais antigos que a janela.
   Data.ensureAllOrders().catch(() => {});
-  const modal = openModal({ title: c0.name, subtitle: 'Cliente', size: 'lg', body: '<div data-cs></div>',
+  const modal = openModal({ title: c0.name, subtitle: 'Cliente', size: 'lg', body: '<div class="col gap-5" data-cs></div>',
     footer: `<button class="icon-btn" data-cmore aria-label="Mais">${icon('more')}</button><span class="grow"></span>
       <button class="btn" data-cedit>${icon('edit')}<span>Editar</span></button>
       <button class="btn btn-primary" data-cnew>${icon('plus')}<span>Novo pedido</span></button>` });
@@ -177,6 +177,7 @@ export async function openCustomerSheet(id, ctx) {
     const orders = Data.ordersOfCustomer(c).sort((a, b) => (b.code || 0) - (a.code || 0));
     const devices = orders.filter((o) => o.status !== 'cancelado').flatMap((o) => o.items.filter((it) => it.serial).map((it) => ({ o, it })));
     const address = [[c.street, c.number].filter(Boolean).join(', '), c.complement, c.district, [c.city, c.uf].filter(Boolean).join(' - '), c.cep].filter(Boolean).join(' · ');
+    const wa = whatsappLink(c.phone, `Olá ${c.name.split(' ')[0]}! `);
     box.innerHTML = `
       <div class="hero-numbers wide">
         <div><span class="xs dim">Pedidos</span><span class="strong num">${stats.orders}</span></div>
@@ -184,11 +185,12 @@ export async function openCustomerSheet(id, ctx) {
         <div><span class="xs dim">A receber</span><span class="strong">${stats.owed > 0 ? moneyHTML(stats.owed, 'tone-amber') : '-'}</span></div>
       </div>
       <dl class="detail-grid">
-        <div class="detail-item"><dt>WhatsApp</dt><dd>${c.phone ? esc(maskPhone(c.phone)) : '-'}</dd></div>
-        <div class="detail-item"><dt>Instagram</dt><dd>${esc(c.instagram || '-')}</dd></div>
-        <div class="detail-item"><dt>E-mail</dt><dd class="truncate">${esc(c.email || '-')}</dd></div>
-        <div class="detail-item"><dt>CPF / documento</dt><dd>${esc(c.doc || '-')}</dd></div>
-        <div class="detail-item"><dt>Aniversário</dt><dd>${c.birthday ? esc(formatDate(c.birthday)) : '-'}</dd></div>
+        ${c.phone ? `<div class="detail-item"><dt>WhatsApp</dt><dd>${wa
+          ? `<a href="${esc(wa)}" target="_blank" rel="noopener noreferrer">${esc(maskPhone(c.phone))}</a>` : esc(maskPhone(c.phone))}</dd></div>` : ''}
+        ${c.instagram ? `<div class="detail-item"><dt>Instagram</dt><dd>${esc(c.instagram)}</dd></div>` : ''}
+        ${c.email ? `<div class="detail-item"><dt>E-mail</dt><dd class="truncate">${esc(c.email)}</dd></div>` : ''}
+        ${c.doc ? `<div class="detail-item"><dt>CPF / documento</dt><dd>${esc(c.doc)}</dd></div>` : ''}
+        ${c.birthday ? `<div class="detail-item"><dt>Aniversário</dt><dd>${esc(formatDate(c.birthday))}</dd></div>` : ''}
         <div class="detail-item"><dt>Cliente desde</dt><dd>${esc(formatDate(c.createdAt))}</dd></div>
       </dl>
       ${address ? `<div class="alert">${icon('pin')}<div>${esc(address)}</div></div>` : ''}

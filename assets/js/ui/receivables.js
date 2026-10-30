@@ -24,7 +24,7 @@ import * as Notify from '../core/notify.js';
 const TABS = [
   { key: 'atrasadas', label: 'Atrasadas', test: (x) => x.status === 'atrasada' },
   { key: 'hoje', label: 'Hoje', test: (x) => x.status === 'hoje' },
-  { key: 'semana', label: 'Próximos 7 dias', test: (x) => x.status === 'aberta' && x.inDays <= 7 },
+  { key: 'semana', label: 'Próximos 7 dias', test: (x) => x.status === 'aberta' && x.dueDate && x.inDays <= 7 },
   { key: 'tudo', label: 'Tudo', test: () => true },
 ];
 
@@ -90,7 +90,7 @@ export function mount(host) {
       <div class="inst-row" data-key="${esc(o.id)}|${esc(x.inst.id)}">
         <button type="button" class="grow link-like" data-open="${esc(o.id)}" style="text-align:left">
           ${showCustomer ? `<div class="strong">${esc(o.customerName)}</div>` : ''}
-          <div class="xs dim">#${String(o.code).padStart(4, '0')} · ${esc(what)} · ${esc(instName(x.inst, o.plan))} · ${esc(formatDate(x.dueDate))}</div>
+          <div class="xs dim">#${String(o.code).padStart(4, '0')} · ${esc(what)} · ${esc(instName(x.inst, o.plan))}${x.dueDate ? ` · ${esc(formatDate(x.dueDate))}` : ''}</div>
           <div class="row gap-2 wrap" style="margin-top:4px">
             <span class="badge no-dot" data-tone="${INST_TONE[x.status]}">${esc(instLabel(x.inst))}</span>
             ${x.inst.remindedAt ? `<span class="xs dim">${esc(remindedText(x.inst.remindedAt))}</span>` : ''}

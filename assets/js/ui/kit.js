@@ -85,9 +85,11 @@ export function openModal(spec) {
   dlg.className = 'modal';
   const sizeClass = (spec.size && spec.size !== 'sm' ? ` ${spec.size}` : '') + (spec.sheet ? ' sheet' : '');
 
+  // O foco inicial do showModal() fica no próprio painel (autofocus): senão
+  // cairia no X do topo, que abria com o anel azul em toda ficha.
   dlg.innerHTML = `
     <div class="modal-inner">
-      <div class="modal-panel${sizeClass}" role="document">
+      <div class="modal-panel${sizeClass}" role="document" tabindex="-1" autofocus>
         <header class="modal-head">
           <div class="grow">
             <h2>${esc(spec.title)}</h2>
@@ -164,7 +166,8 @@ export function openModal(spec) {
   // cobrindo metade do formulário antes de a pessoa escolher onde mexer.
   if (TOUCH.matches) return api;
   requestAnimationFrame(() => {
-    const first = api.panel.querySelector('[data-autofocus], input:not([type=hidden]), textarea, select');
+    // o marcado com data-autofocus vem antes (ex.: o valor no pagamento, não "Como recebeu")
+    const first = api.panel.querySelector('[data-autofocus]') || api.panel.querySelector('input:not([type=hidden]), textarea, select');
     if (first) first.focus();
   });
 

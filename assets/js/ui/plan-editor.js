@@ -29,6 +29,7 @@ export function instLabel(p) {
   if (p.status === 'paga') return 'Paga';
   if (p.status === 'hoje') return 'Vence hoje';
   if (p.status === 'atrasada') return p.late === 1 ? 'Atrasada 1 dia' : `Atrasada ${p.late} dias`;
+  if (!p.dueDate) return 'Na entrega';
   if (p.inDays === 1) return 'Vence amanhã';
   return p.inDays <= 7 ? `Vence em ${p.inDays} dias` : `Vence ${formatDate(p.dueDate)}`;
 }

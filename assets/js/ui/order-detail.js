@@ -28,7 +28,7 @@ export function openOrderDetail(orderId, { onChanged } = {}) {
     title: `Pedido #${String(order.code).padStart(4, '0')}`,
     subtitle: `${order.customerName} · criado ${relativeDate(order.createdAt)}`,
     size: 'lg',
-    body: '<div data-detail></div>',
+    body: '<div class="col gap-5" data-detail></div>',
     footer: `
       <button class="btn btn-ghost" data-delete>${icon('trash')} Excluir</button>
       <span class="grow"></span>
@@ -127,19 +127,18 @@ export function openOrderDetail(orderId, { onChanged } = {}) {
         <div class="fieldset-title">Dados</div>
         <dl class="detail-grid">
           ${detail('Cliente', order.customerName)}
-          ${detail('WhatsApp', order.customerPhone
-            ? (wa ? `<a href="${esc(wa)}" target="_blank" rel="noopener noreferrer">${esc(maskPhone(order.customerPhone))}</a>`
-                  : esc(maskPhone(order.customerPhone)))
-            : '-', true)}
-          ${detail('E-mail', order.customerEmail || '-')}
-          ${detail('Documento', order.customerDoc || '-')}
+          ${order.customerPhone ? detail('WhatsApp', wa
+            ? `<a href="${esc(wa)}" target="_blank" rel="noopener noreferrer">${esc(maskPhone(order.customerPhone))}</a>`
+            : esc(maskPhone(order.customerPhone)), true) : ''}
+          ${order.customerEmail ? detail('E-mail', order.customerEmail) : ''}
+          ${order.customerDoc ? detail('Documento', order.customerDoc) : ''}
           ${detail('Data do pedido', formatDate(order.orderDate))}
-          ${detail('Previsão', order.dueDate ? formatDate(order.dueDate) : '-')}
-          ${detail('Pagamento', `${order.paymentMethod || '-'}${order.installments > 1 ? ` · ${order.installments}×` : ''}`)}
-          ${detail('Envio', order.shippingMethod || '-')}
-          ${detail('Rastreio', order.trackingCode || '-')}
+          ${order.dueDate ? detail('Previsão', formatDate(order.dueDate)) : ''}
+          ${order.paymentMethod ? detail('Pagamento', `${order.paymentMethod}${order.installments > 1 ? ` · ${order.installments}×` : ''}`) : ''}
+          ${order.shippingMethod ? detail('Envio', order.shippingMethod) : ''}
+          ${order.trackingCode ? detail('Rastreio', order.trackingCode) : ''}
           ${order.handedOverAt && !order.deliveredAt ? detail('Cliente levou em', formatDateTime(order.handedOverAt)) : ''}
-          ${detail('Finalizado em', order.deliveredAt ? formatDateTime(order.deliveredAt) : '-')}
+          ${order.deliveredAt ? detail('Finalizado em', formatDateTime(order.deliveredAt)) : ''}
         </dl>
         ${address ? `<div class="alert">${icon('pin')}<div>${esc(address)}</div></div>` : ''}
         ${order.notes ? `<div class="alert">${icon('info')}<div style="white-space:pre-wrap">${esc(order.notes)}</div></div>` : ''}
@@ -153,6 +152,15 @@ export function openOrderDetail(orderId, { onChanged } = {}) {
     // O bloco de pagamentos vive dentro do HTML acabado de escrever.
     const alvo = host.querySelector('[data-payments]');
     if (alvo) alvo.innerHTML = paymentsHTML(order, t.total);
+
+    // No celular o andamento é uma linha que rola de lado: centra a etapa atual.
+    const steps = host.querySelector('.steps');
+    const cur = steps?.querySelector('.step.current');
+    if (cur && steps.scrollWidth > steps.clientWidth) {
+      const a = cur.getBoundingClientRect();
+      const b = steps.getBoundingClientRect();
+      steps.scrollLeft += a.left - b.left - (b.width - a.width) / 2;
+    }
   }
 
   /*
@@ -211,7 +219,7 @@ export function openOrderDetail(orderId, { onChanged } = {}) {
           ${plan.map((p) => `
             <div class="inst-row ${p.status === 'paga' ? 'is-paid' : ''}">
               <div class="grow">
-                <div class="strong small">${esc(instName(p, order.plan))} <span class="dim" style="font-weight:400">· ${esc(formatDate(p.dueDate))}</span></div>
+                <div class="strong small">${esc(instName(p, order.plan))}${p.dueDate ? ` <span class="dim" style="font-weight:400">· ${esc(formatDate(p.dueDate))}</span>` : ''}</div>
                 <div class="row gap-2 wrap" style="margin-top:4px">
                   <span class="badge no-dot" data-tone="${INST_TONE[p.status]}">${esc(instLabel(p))}</span>
                   ${p.status !== 'paga' && p.paid > 0 ? `<span class="xs dim">pago ${esc(money(p.paid))} de ${esc(money(p.amount))}</span>` : ''}

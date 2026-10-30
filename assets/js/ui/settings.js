@@ -42,9 +42,9 @@ export function mount(host, ctx) {
           <div class="form-grid">
             <div class="field span-6"><label class="label" for="st-name">Nome da loja</label>
               <input class="input" id="st-name" name="storeName" maxlength="80" value="${esc(s.storeName)}"></div>
-            <div class="field span-6 span-half-mobile"><label class="label" for="st-phone">WhatsApp da loja</label>
+            <div class="field span-6"><label class="label" for="st-phone">WhatsApp da loja</label>
               <input class="input" id="st-phone" name="phone" inputmode="tel" maxlength="16" value="${esc(maskPhone(s.phone))}" placeholder="(44) 99999-0000"></div>
-            <div class="field span-6 span-half-mobile"><label class="label" for="st-ig">Instagram</label>
+            <div class="field span-6"><label class="label" for="st-ig">Instagram</label>
               <input class="input" id="st-ig" name="instagram" maxlength="60" value="${esc(s.instagram)}" placeholder="@i7evenstore"></div>
             <div class="field span-6"><label class="label" for="st-pix">Chave Pix</label>
               <input class="input" id="st-pix" name="pixKey" maxlength="120" value="${esc(s.pixKey)}" placeholder="CNPJ, e-mail, telefone ou aleatória"></div>

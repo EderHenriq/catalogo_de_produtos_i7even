@@ -210,8 +210,9 @@ export function planState(plan, paid, today) {
       const got = Math.min(left, amount);
       left = round2(left - got);
       const open = round2(amount - got);
-      const diff = dayDiff(today, p.dueDate);
-      const status = open <= 0.005 ? 'paga' : diff > 0 ? 'atrasada' : diff === 0 ? 'hoje' : 'aberta';
+      // sem vencimento (saldo de um pedido que ainda vai ser entregue): aberta, nunca atrasa
+      const diff = p.dueDate ? dayDiff(today, p.dueDate) : null;
+      const status = open <= 0.005 ? 'paga' : diff === null ? 'aberta' : diff > 0 ? 'atrasada' : diff === 0 ? 'hoje' : 'aberta';
       return { ...p, amount, paid: round2(got), open: status === 'paga' ? 0 : open, status, late: status === 'atrasada' ? diff : 0, inDays: diff ? -diff : 0 };
     });
 }

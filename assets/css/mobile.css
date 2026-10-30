@@ -55,6 +55,8 @@ button, a, input, select, textarea, label, summary {
   .textarea { min-height: 96px; }
 
   .money-input > .input { padding-left: 38px; }
+  /* telefone em meia largura: o número inteiro cabe até nos iPhones de 375px */
+  .input[inputmode='tel'] { padding-left: 10px; padding-right: 8px; }
   .money-input::before { font-size: var(--fs-base); left: 13px; }
 
   /* O Safari renderiza o campo de data com altura própria; forçamos a nossa. */
@@ -115,6 +117,7 @@ button, a, input, select, textarea, label, summary {
     display: inline-block;
     min-height: var(--tap-sm);
     padding: 9px 0;
+    margin: -9px 0;
   }
 
   .menu button { min-height: var(--tap); font-size: var(--fs-base); }
@@ -361,6 +364,20 @@ button, a, input, select, textarea, label, summary {
   .item-row { grid-template-columns: minmax(0, 1fr); padding: var(--sp-3); gap: var(--sp-2); }
   .item-numbers { justify-content: space-between; gap: var(--sp-2); }
   .item-numbers > .right { text-align: left; }
+
+  /* Andamento numa linha que rola de lado (a etapa atual vem centrada):
+     antes eram quatro linhas de botões antes de chegar aos itens. */
+  .steps {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    margin: 0 calc(-1 * var(--sp-4));
+    padding: 0 var(--sp-4);
+    scrollbar-width: none;
+    overscroll-behavior-x: contain;
+  }
+  .steps::-webkit-scrollbar { display: none; }
+  .step { flex: none; }
+  .steps .step-cancel { flex: none; margin-left: var(--sp-2); }
 
   .detail-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--sp-3); }
   .detail-item dd { font-size: var(--fs-base); overflow-wrap: anywhere; }

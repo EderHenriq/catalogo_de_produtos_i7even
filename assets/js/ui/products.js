@@ -317,7 +317,7 @@ export function openProductSheet(productId) {
     title: p.name,
     subtitle: [Data.category(p.categoryId)?.name, p.brand, p.year].filter(Boolean).join(' · '),
     size: 'lg',
-    body: '<div data-sheet></div>',
+    body: '<div class="col gap-5" data-sheet></div>',
     footer: `
       <button class="icon-btn" data-more aria-label="Mais ações">${icon('more')}</button>
       <span class="grow"></span>
@@ -900,7 +900,7 @@ export function openVariantSheet(variantId, { onChange } = {}) {
     title: variantLabel(v) || 'Padrão',
     subtitle: p?.name || '',
     size: 'lg',
-    body: '<div data-vsheet></div>',
+    body: '<div class="col gap-5" data-vsheet></div>',
     footer: `
       <button class="icon-btn" data-vmore aria-label="Mais ações">${icon('more')}</button>
       <span class="grow"></span>

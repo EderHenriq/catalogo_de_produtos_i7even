@@ -14,6 +14,7 @@ import { instName } from './plan-editor.js';
 const when = (x) => {
   if (x.status === 'hoje') return 'vence *hoje*';
   if (x.status === 'atrasada') return `venceu em *${formatDate(x.dueDate)}*`;
+  if (!x.dueDate) return 'na entrega';
   if (x.inDays === 1) return 'vence *amanhã*';
   return `vence em *${formatDate(x.dueDate)}*`;
 };

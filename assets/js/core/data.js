@@ -595,13 +595,25 @@ export const owes = (o) => o.balance > 0.005 && o.status !== 'orcamento' && o.st
 
 /**
  * Parcelas do pedido com a situação de hoje. Pedido devendo sem combinado
- * vira uma "parcela" só, com o saldo, vencendo na previsão (ou na data do pedido).
+ * vira uma "parcela" só, com o saldo (vencimento em `saldoDue`).
  */
 export function orderPlan(o, today = todayISO()) {
   if (o.plan?.length) return planState(o.plan, o.paidAmount, today);
   if (!owes(o)) return [];
-  return planState([{ id: `saldo-${o.id}`, number: 1, dueDate: o.dueDate || o.orderDate, amount: o.total, note: '', synthetic: true }],
+  return planState([{ id: `saldo-${o.id}`, number: 1, dueDate: saldoDue(o), amount: o.total, note: '', synthetic: true }],
     o.paidAmount, today);
+}
+
+/**
+ * Vencimento do saldo sem combinado: a previsão; sem ela, o dia em que o
+ * cliente levou (fiado) ou a data do pedido, se ele já está "Aguardando pgto."
+ * ou finalizado. Pedido ainda andando (o sinal de uma encomenda) não vira
+ * cobrança atrasada no dia seguinte: o saldo vence na entrega (sem data).
+ */
+function saldoDue(o) {
+  if (o.dueDate) return o.dueDate;
+  if (o.handedOverAt) return todayISO(new Date(o.handedOverAt));
+  return o.status === 'aguardando' || o.status === 'entregue' ? o.orderDate : '';
 }
 
 /**
@@ -617,7 +629,8 @@ export function receivables(today = todayISO()) {
       out.push({ order: o, inst, open: inst.open, status: inst.status, dueDate: inst.dueDate, late: inst.late, inDays: inst.inDays });
     }
   }
-  return out.sort((a, b) => String(a.dueDate).localeCompare(String(b.dueDate)) || (a.order.code || 0) - (b.order.code || 0));
+  // os "na entrega" (sem data) vão para o fim
+  return out.sort((a, b) => String(a.dueDate || '9999').localeCompare(String(b.dueDate || '9999')) || (a.order.code || 0) - (b.order.code || 0));
 }
 
 /** Resumo para o painel, o menu e os avisos. */
@@ -626,7 +639,7 @@ export function receivablesSummary(today = todayISO()) {
   const sum = (xs) => round2(xs.reduce((a, x) => a + x.open, 0));
   const late = list.filter((x) => x.status === 'atrasada');
   const due = list.filter((x) => x.status === 'hoje');
-  const week = list.filter((x) => x.status === 'aberta' && x.inDays <= 7);
+  const week = list.filter((x) => x.status === 'aberta' && x.dueDate && x.inDays <= 7);
   return {
     list,
     total: round2(state.orders.filter(owes).reduce((a, o) => a + o.balance, 0)),

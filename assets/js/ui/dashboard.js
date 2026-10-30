@@ -170,7 +170,7 @@ export function mount(host, ctx) {
         ${kpi('Lucro do mês', money(thisMonth.profit), 'trend',
               delta(thisMonth.profit, lastMonth.profit, 'vs. mês passado'), true)}
         ${kpi('Pedidos em aberto', String(open.length), 'orders',
-              `${esc(thisMonth.count)} fechados no mês`)}
+              `${esc(thisMonth.count)} ${thisMonth.count === 1 ? 'venda' : 'vendas'} no mês`)}
         ${kpi('A receber', money(receivable), 'card',
               `Ticket médio ${esc(moneyCompact(thisMonth.ticket))}`, true)}
       </div>

@@ -78,7 +78,8 @@ export function filterOrders(list, { term = searchTerm } = {}) {
   return list.filter((o) => {
     if (filters.statuses.size && !filters.statuses.has(o.status)) return false;
     if (filters.onlyOpen && !STATUS_MAP[o.status]?.open) return false;
-    if (filters.onlyUnpaid && o.paymentStatus === 'pago') return false;
+    // "Só a receber": quem deve de verdade (orçamento e cancelado não entram)
+    if (filters.onlyUnpaid && !Data.owes(o)) return false;
     if (filters.channel && o.channel !== filters.channel) return false;
     if (from && toDate(o.orderDate || o.createdAt) < from) return false;
     if (!q) return true;
@@ -208,7 +209,8 @@ export function mount(host, ctx) {
     if (key !== lastQuery) { lastQuery = key; shown = PAGE; }
 
     const list = currentList();
-    const total = list.reduce((acc, o) => acc + (o.status === 'cancelado' ? 0 : o.total), 0);
+    const quotesOnly = list.every((o) => o.status === 'orcamento');
+    const total = list.reduce((acc, o) => acc + (o.status === 'cancelado' || (o.status === 'orcamento' && !quotesOnly) ? 0 : o.total), 0);
 
     if (!Store.all().length) {
       $list.innerHTML = emptyState({
@@ -298,8 +300,7 @@ export function mount(host, ctx) {
         <td><span class="badge" data-tone="${esc(st?.tone || 'gray')}">${esc(st?.short || o.status)}</span></td>
         <td class="right">
           <div class="strong mono money-sensitive">${esc(money(o.total))}</div>
-          ${o.paymentStatus !== 'pago' && o.total > 0
-            ? `<div class="cell-sub">a receber</div>` : ''}
+          ${Data.owes(o) ? `<div class="cell-sub tone-amber money-sensitive">falta ${esc(money(o.balance))}</div>` : ''}
         </td>
         <td><span class="small muted nowrap">${esc(relativeDate(o.orderDate || o.createdAt))}</span></td>
         <td class="col-actions">
@@ -332,7 +333,10 @@ export function mount(host, ctx) {
         </div>
         <div class="small muted clamp-2">${esc(itemSummary(o))}</div>
         <div class="row-between">
-          <span class="strong mono money-sensitive">${esc(money(o.total))}</span>
+          <span class="col">
+            <span class="strong mono money-sensitive">${esc(money(o.total))}</span>
+            ${Data.owes(o) ? `<span class="xs tone-amber money-sensitive">falta ${esc(money(o.balance))}</span>` : ''}
+          </span>
           ${NEXT_STATUS[o.status]
             ? (advanceLabel(o, NEXT_STATUS[o.status]).text === 'Receber'
               ? `<button class="btn btn-sm" data-advance="${esc(o.id)}">${icon('cash')} Receber</button>`

@@ -524,7 +524,7 @@ function bodyHTML(d) {
         <div class="field span-3 span-half-mobile">
           <label class="label" for="f-phone">WhatsApp</label>
           <input class="input" id="f-phone" data-field="customerPhone" inputmode="tel" maxlength="16"
-                 value="${esc(maskPhone(d.customerPhone))}" placeholder="(00) 00000-0000">
+                 value="${esc(maskPhone(d.customerPhone))}" placeholder="(44) 99999-9999">
         </div>
         <div class="field span-3 span-half-mobile">
           <label class="label" for="f-channel">Veio de</label>

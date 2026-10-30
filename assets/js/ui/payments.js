@@ -17,6 +17,7 @@ import { newPaymentDraft } from '../core/store.js';
 import * as Data from '../core/data.js';
 import { PAYMENT_METHODS, TRADE_METHOD, CONDITIONS } from '../core/constants.js';
 import { openModal, confirmDialog } from './kit.js';
+import { pref, setPref } from './common.js';
 import { icon } from './icons.js';
 import { esc, money, parseMoney, moneyInputValue, formatDate, todayISO } from '../core/utils.js';
 
@@ -26,6 +27,9 @@ export function tradeText(t) {
   return [t.productName, t.storage, t.color, t.condition, t.serial ? `IMEI ${t.serial}` : '',
     t.battery != null && t.battery !== '' ? `bateria ${t.battery}%` : '', t.notes].filter(Boolean).join(' · ');
 }
+
+/** Formas de receber dinheiro (as outras descrevem o combinado, não a entrada). */
+const RECEIVE_METHODS = PAYMENT_METHODS.filter((m) => m !== TRADE_METHOD && m !== 'Parcelado na loja' && m !== 'Entrada + saldo');
 
 /** Soma dos lançamentos. */
 export function totalPago(order) {
@@ -127,9 +131,13 @@ export function paymentsHTML(order, total, { editavel = true } = {}) {
  */
 export function openPaymentDialog({ payment = null, saldo = 0, metodoPadrao = '', troca = false, onConfirm }) {
   const editando = !!payment;
+  // "Como recebeu" já vem com uma forma de receber de verdade: a combinada do
+  // pedido, ou a última usada quando a combinada é "Parcelado na loja",
+  // "Entrada + saldo" ou não foi informada (o relatório deixa de ter "-").
+  const metodo = RECEIVE_METHODS.includes(metodoPadrao) ? metodoPadrao : pref('pay.method', 'PIX');
   const p = payment
     ? { ...payment }
-    : newPaymentDraft({ amount: saldo > 0 ? saldo : 0, method: metodoPadrao === TRADE_METHOD ? '' : metodoPadrao, date: todayISO() });
+    : newPaymentDraft({ amount: saldo > 0 ? saldo : 0, method: metodo, date: todayISO() });
   const isTrade = () => (editando ? !!p.trade : modal.panel.querySelector('#pay-method').value === TRADE_METHOD);
   // aparelhos do cadastro (iPhone e o que tem IMEI primeiro) para escolher o modelo da troca
   const models = Data.products().filter((x) => x.active !== false)
@@ -283,6 +291,7 @@ export function openPaymentDialog({ payment = null, saldo = 0, metodoPadrao = ''
       return;
     }
     if (!(valor > 0)) { fail('Informe um valor maior que zero.', $('#pay-amount')); return; }
+    if (!editando && RECEIVE_METHODS.includes($('#pay-method').value)) setPref('pay.method', $('#pay-method').value);
     onConfirm({
       ...p,
       amount: valor,

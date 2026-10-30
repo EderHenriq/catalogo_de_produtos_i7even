@@ -472,6 +472,7 @@ dialog.modal::backdrop {
   animation: sheet-up var(--t-base) both;
   overflow: hidden;
 }
+.modal-panel:focus-visible { outline: none; }
 .modal-panel.lg { max-width: 860px; }
 .modal-panel.xl { max-width: 1060px; }
 

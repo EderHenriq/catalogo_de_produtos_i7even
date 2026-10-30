@@ -91,6 +91,10 @@ test('situação das parcelas: pagamentos abatem da mais antiga', () => {
   assert.ok(st.every((x) => x.status === 'paga' && x.open === 0));
   st = planState(plan, -50, '2026-08-01');
   assert.ok(st.every((x) => x.paid === 0), 'estorno não paga parcela');
+  // saldo sem data (pedido que ainda vai ser entregue): em aberto, nunca atrasado
+  st = planState([{ number: 1, dueDate: '', amount: 1899 }], 0, '2026-10-30');
+  assert.equal(st[0].status, 'aberta');
+  assert.equal(st[0].late, 0);
 });
 
 test('pedido mudou de valor: rebalanceia só as abertas', () => {
