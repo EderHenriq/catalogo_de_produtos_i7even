@@ -1004,3 +1004,78 @@ body.catalog { background: var(--cat-page); isolation: isolate; }
 .cat-soon-ic { width: 84px; height: 84px; margin-bottom: 10px; display: grid; place-items: center; border-radius: 26px; background: var(--cat-photo-bg); font-size: 38px; overflow: hidden; isolation: isolate; }
 .cat-soon-ic img { width: 100%; height: 100%; object-fit: contain; padding: 12%; mix-blend-mode: multiply; }
 .cat-soon .cat-btn + .cat-btn { margin-top: 8px; }
+
+/* ======================================== modo claro com mais relevo */
+/* No claro, o vidro tinha borda branca sobre o fundo branco: cartões,
+   abas, filtros e as opções da ficha quase sumiam. Aqui eles ganham um
+   contorno cinza bem leve e sombra de repouso (o escuro fica como está). */
+:root {
+  --cat-line: rgba(15, 23, 42, .13);
+  --cat-lift: 0 1px 3px rgba(15, 23, 42, .08), 0 12px 28px -12px rgba(15, 23, 42, .3);
+  --cat-lift-sm: 0 1px 3px rgba(15, 23, 42, .09), 0 6px 16px -6px rgba(15, 23, 42, .24);
+  --glass-border: var(--cat-line);
+  --glass-shadow: var(--cat-lift-sm);
+}
+:root[data-theme='dark'] {
+  --cat-line: var(--divider);
+  --cat-lift: 0 10px 26px -14px rgba(0, 0, 0, .65);
+  --cat-lift-sm: 0 4px 14px -8px rgba(0, 0, 0, .6);
+  --glass-border: rgba(255, 255, 255, .16);
+  --glass-shadow: 0 12px 34px -12px rgba(0, 0, 0, .7), 0 2px 6px rgba(0, 0, 0, .3);
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) {
+    --cat-line: var(--divider);
+    --cat-lift: 0 10px 26px -14px rgba(0, 0, 0, .65);
+    --cat-lift-sm: 0 4px 14px -8px rgba(0, 0, 0, .6);
+    --glass-border: rgba(255, 255, 255, .16);
+    --glass-shadow: 0 12px 34px -12px rgba(0, 0, 0, .7), 0 2px 6px rgba(0, 0, 0, .3);
+  }
+}
+.cat-card { border-color: var(--cat-line); box-shadow: var(--cat-lift); }
+.cat-circle-img { box-shadow: 0 0 0 2px var(--bg), 0 0 0 3px var(--cat-line), var(--cat-lift-sm); }
+.cat-circle[aria-pressed='true'] .cat-circle-img { box-shadow: 0 0 0 2px var(--bg), 0 0 0 4px var(--text), var(--cat-lift-sm); }
+.cat-mode { border-color: var(--cat-line); box-shadow: var(--cat-lift-sm); }
+.cat-mode[aria-checked='true'] { border-color: var(--text); box-shadow: 0 0 0 3px var(--accent-soft), var(--cat-lift-sm); }
+.cat-btn-ghost { border-color: var(--cat-line); box-shadow: var(--cat-lift-sm); }
+.cat-bag-item { box-shadow: inset 0 0 0 1px var(--cat-line); }
+/* opção sem combinação: o tracejado precisa aparecer */
+.cat-opt-btn.is-off { border-color: var(--border-strong); box-shadow: none; }
+
+/* ============================================ fotos da ficha: setas e troca */
+/* Setas só no computador (mouse): no celular passa a foto com o dedo. */
+.cat-arrow { display: none; }
+@media (hover: hover) and (pointer: fine) {
+  .cat-arrow {
+    position: absolute; top: 50%; z-index: 3;
+    width: 44px; height: 44px; margin-top: -22px;
+    display: grid; place-items: center;
+    padding: 0; border: 1px solid rgba(15, 23, 42, .08); border-radius: 50%;
+    background: rgba(255, 255, 255, .9); color: #1d1d1f;
+    box-shadow: 0 1px 3px rgba(15, 23, 42, .1), 0 8px 20px -8px rgba(15, 23, 42, .35);
+    -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px);
+    cursor: pointer; opacity: .8;
+    transition: opacity .2s, transform .2s var(--cat-spring), background .2s;
+  }
+  .cat-arrow.prev { left: 14px; }
+  .cat-arrow.next { right: 14px; }
+  .cat-arrow .icon { width: 20px; height: 20px; }
+  .cat-sheet-gallery:hover .cat-arrow { opacity: 1; }
+  .cat-arrow:hover { background: #fff; transform: scale(1.06); }
+  .cat-arrow:active { transform: scale(.92); }
+}
+.cat-sheet-panel:focus, .cat-sheet-panel:focus-visible { outline: none; }
+
+/* troca de cor: a foto antiga se desfaz enquanto a nova aparece */
+.cat-slide img.cat-wait { opacity: 0; }
+.cat-slide img.cat-in { animation: cat-photo-in .22s var(--cat-ease) both; }
+.cat-slide img.cat-ghost { z-index: 1; }
+.cat-slide img.cat-ghost.out { animation: cat-ghost-out .22s var(--cat-ease) forwards; }
+@keyframes cat-photo-in { from { opacity: 0; transform: scale(.985); } to { opacity: 1; transform: none; } }
+@keyframes cat-ghost-out { to { opacity: 0; } }
+/* preço novo (outra capacidade/condição): só um piscar leve */
+.cat-price.cat-tick { animation: cat-tick .18s var(--cat-ease) both; }
+@keyframes cat-tick { from { opacity: .35; } }
+@media (prefers-reduced-motion: reduce) {
+  .cat-slide img.cat-in, .cat-slide img.cat-ghost.out, .cat-price.cat-tick { animation: none; }
+}

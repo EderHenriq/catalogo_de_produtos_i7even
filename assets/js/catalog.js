@@ -626,6 +626,7 @@ function openProduct(id) {
   history.replaceState(null, '', `#p=${encodeURIComponent(p.id)}`);
 
   const current = () => vs.find((v) => matchesSel(v, sel)) || null;
+  let galKey = null;   // fotos na tela (mudou a cor = fotos novas)
 
   function render() {
     const v = current();
@@ -640,16 +641,26 @@ function openProduct(id) {
     const cl = colorList(p, v?.color);
     const vImg = v?.image || cl[0] || (v?.color ? vs.find((x) => x.color === v.color && x.image)?.image : '') || '';
     const shown = cl.length && !v?.image ? cl : vImg && !photos.includes(vImg) ? [vImg, ...photos] : photos.length ? photos : (vImg ? [vImg] : []);
+    // Mesmas fotos (trocou capacidade/condição): a galeria fica como está, sem
+    // recarregar a foto. Fotos novas (outra cor): a atual some enquanto a nova
+    // aparece (troca curta, ~0,2s).
+    const key = shown.join('|');
+    const keep = galKey === key ? dlg.querySelector('.cat-sheet-gallery') : null;
+    const oldSrc = galKey !== null && !keep ? dlg.querySelectorAll('.cat-slide img')[photoIdx]?.getAttribute('src') : '';
+    const oldPrice = dlg.querySelector('.cat-price')?.textContent;
+    if (galKey !== null && !keep) photoIdx = 0;
     if (photoIdx >= shown.length) photoIdx = 0;
-    dlg.innerHTML = `
-      <div class="cat-sheet-panel">
+    galKey = key;
+    const html = `
         <button type="button" class="cat-close" data-close aria-label="Fechar">${icon('x')}</button>
         <div class="cat-sheet-gallery">
           ${shown.length ? `
             <div class="cat-carousel" data-carousel>
               ${shown.map((u, i) => `<div class="cat-slide"><img src="${esc(u)}" alt="${esc(p.name)} ${i + 1}" decoding="async" ${i ? 'loading="lazy"' : 'fetchpriority="high"'}></div>`).join('')}
             </div>
-            ${shown.length > 1 ? `<div class="cat-dots-nav">${shown.map((_, i) => `<button type="button" data-slide="${i}" aria-label="Foto ${i + 1}" aria-pressed="${i === photoIdx}"></button>`).join('')}</div>` : ''}`
+            ${shown.length > 1 ? `<div class="cat-dots-nav">${shown.map((_, i) => `<button type="button" data-slide="${i}" aria-label="Foto ${i + 1}" aria-pressed="${i === photoIdx}"></button>`).join('')}</div>
+            <button type="button" class="cat-arrow prev" data-photo-step="-1" aria-label="Foto anterior">${icon('chevronLeft')}</button>
+            <button type="button" class="cat-arrow next" data-photo-step="1" aria-label="Próxima foto">${icon('chevronRight')}</button>` : ''}`
           : `<div class="cat-slide empty">${icon('device')}</div>`}
         </div>
         <div class="cat-sheet-info">
@@ -698,17 +709,44 @@ function openProduct(id) {
               href="${esc(storeWa(`Olá! Tenho interesse no ${vTitle(p, v)} (${money(modePrice(v, mode))}${mode === 'encomenda' ? ', sob encomenda' : ''}). ${mode === 'pronta' ? 'Ainda tem disponível?' : 'Qual o prazo certinho?'}`))}">${icon('whatsapp')} Perguntar no WhatsApp</a>` : ''}
             <button type="button" class="cat-btn cat-btn-ghost" data-share>${icon('share')} Compartilhar</button>
           </div>
-        </div>
-      </div>`;
-    const car = dlg.querySelector('[data-carousel]');
-    if (car) {
-      requestAnimationFrame(() => { car.scrollLeft = photoIdx * car.clientWidth; });
-      car.addEventListener('scroll', () => {
-        const i = Math.round(car.scrollLeft / Math.max(car.clientWidth, 1));
-        if (i !== photoIdx) { photoIdx = i; dlg.querySelectorAll('[data-slide]').forEach((b) => b.setAttribute('aria-pressed', String(Number(b.dataset.slide) === i))); }
-      }, { passive: true });
+        </div>`;
+    if (keep) {
+      // só o bloco de informações muda; a galeria nem sai do lugar
+      const tpl = document.createElement('template');
+      tpl.innerHTML = html;
+      dlg.querySelector('.cat-sheet-info').replaceWith(tpl.content.querySelector('.cat-sheet-info'));
+    } else {
+      fillSheet(dlg, html);
+      const car = dlg.querySelector('[data-carousel]');
+      if (car) {
+        requestAnimationFrame(() => { car.scrollLeft = photoIdx * car.clientWidth; });
+        car.addEventListener('scroll', () => {
+          const i = Math.round(car.scrollLeft / Math.max(car.clientWidth, 1));
+          if (i !== photoIdx) { photoIdx = i; dlg.querySelectorAll('[data-slide]').forEach((b) => b.setAttribute('aria-pressed', String(Number(b.dataset.slide) === i))); }
+        }, { passive: true });
+      }
+      if (oldSrc) crossfade(dlg.querySelector('.cat-slide'), oldSrc);
     }
+    const price = dlg.querySelector('.cat-price');
+    if (oldPrice && price && price.textContent !== oldPrice && !reduceMotion.matches) price.classList.add('cat-tick');
+    // o botão tocado foi redesenhado: o foco volta para a ficha (setas do teclado seguem valendo)
+    if (dlg.open && !dlg.contains(document.activeElement)) dlg.querySelector('.cat-sheet-panel')?.focus({ preventScroll: true });
   }
+
+  /** Setas (computador) e teclado: foto anterior/próxima, dando a volta. */
+  function stepPhoto(d) {
+    const car = dlg.querySelector('[data-carousel]');
+    const n = dlg.querySelectorAll('.cat-slide').length;
+    if (!car || n < 2) return;
+    photoIdx = (photoIdx + d + n) % n;
+    car.scrollTo({ left: photoIdx * car.clientWidth, behavior: reduceMotion.matches ? 'auto' : 'smooth' });
+  }
+  dlg.addEventListener('keydown', (e) => {
+    if ((e.key === 'ArrowLeft' || e.key === 'ArrowRight') && !e.target.closest('input, textarea, select')) {
+      e.preventDefault();
+      stepPhoto(e.key === 'ArrowLeft' ? -1 : 1);
+    }
+  });
 
   dlg.addEventListener('click', (e) => {
     if (e.target === dlg || e.target.closest('[data-close]')) { close(); return; }
@@ -724,10 +762,11 @@ function openProduct(id) {
             || Number(hasReady(b)) - Number(hasReady(a)))[0];
         if (fallback) for (const d of ds) sel[d.field] = fallback[d.field] || '';
       }
-      photoIdx = 0;
       render();
       return;
     }
+    const ps = e.target.closest('[data-photo-step]');
+    if (ps) { stepPhoto(Number(ps.dataset.photoStep)); return; }
     const md = e.target.closest('[data-mode]');
     if (md) { mode = md.dataset.mode; render(); return; }
     const s = e.target.closest('[data-slide]');
@@ -805,8 +844,10 @@ function openBag() {
   function render(error = '') {
     const items = bagItems();
     const total = items.reduce((a, x) => a + x.qty * x.price, 0);
-    dlg.innerHTML = `
-      <div class="cat-sheet-panel narrow">
+    // o que já foi digitado (nome, WhatsApp, observação) não some ao mexer na quantidade
+    const old = dlg.querySelector('[data-send]');
+    const typed = old && { name: old.name.value, phone: old.phone.value, notes: old.notes.value };
+    fillSheet(dlg, `
         <button type="button" class="cat-close" data-close aria-label="Fechar">${icon('x')}</button>
         <div class="cat-bag-body">
           <h2>Sua sacola</h2>
@@ -837,8 +878,9 @@ function openBag() {
               <p class="cat-fine">Você confirma pagamento e entrega direto com a loja no WhatsApp.</p>
             </form>` : `
             <div class="cat-none"><p><b>Sua sacola está vazia</b></p><p>Toque num modelo e escolha a versão que você quer.</p></div>`}
-        </div>
-      </div>`;
+        </div>`, 'narrow');
+    const form = dlg.querySelector('[data-send]');
+    if (typed && form) { form.name.value = typed.name; form.phone.value = typed.phone; form.notes.value = typed.notes; }
   }
 
   dlg.addEventListener('click', (e) => {
@@ -886,16 +928,14 @@ function openBag() {
     writeJSON(BAG_KEY, st.bag);
     updateBagButton();
     const wa = storeWa(text);
-    dlg.innerHTML = `
-      <div class="cat-sheet-panel narrow">
+    fillSheet(dlg, `
         <div class="cat-done">
           <span class="cat-done-icon">${icon('checkCircle')}</span>
           <h2>Pedido C${esc(res.number)} pronto!</h2>
           <p>Agora é só enviar a mensagem no WhatsApp da loja para confirmar pagamento e entrega.</p>
           ${wa ? `<a class="cat-btn cat-btn-wa block" href="${esc(wa)}">${icon('whatsapp')} Abrir o WhatsApp</a>` : ''}
           <button type="button" class="cat-btn cat-btn-ghost block" data-close>Voltar ao catálogo</button>
-        </div>
-      </div>`;
+        </div>`, 'narrow').scrollTop = 0;
     // No iPhone, abrir o WhatsApp depois de esperar o servidor só funciona na mesma aba.
     if (wa) setTimeout(() => { location.href = wa; }, 600);
   });
@@ -925,6 +965,54 @@ function message(number, name, notes, items, total) {
 }
 
 /* ---------------------------------------------------- folhas: movimento -- */
+
+/**
+ * Troca de foto ao mudar a cor: a foto antiga fica por cima até a nova
+ * estar pronta e as duas se cruzam rápido (sem piscar o fundo vazio).
+ */
+function crossfade(slide, oldSrc) {
+  const img = slide?.querySelector('img');
+  if (!img || reduceMotion.matches || img.getAttribute('src') === oldSrc) return;
+  const ghost = document.createElement('img');
+  ghost.className = 'cat-ghost';
+  ghost.alt = '';
+  ghost.src = oldSrc;
+  slide.appendChild(ghost);
+  img.classList.add('cat-wait');
+  let started = false;
+  const start = () => {
+    if (started) return;
+    started = true;
+    img.classList.remove('cat-wait');
+    img.classList.add('cat-in');
+    ghost.classList.add('out');
+    setTimeout(() => ghost.remove(), 260);
+  };
+  (img.decode ? img.decode() : Promise.resolve()).catch(() => {}).then(start);
+  setTimeout(start, 450);   // foto lenta: não segura a antiga para sempre
+}
+
+/**
+ * Escreve o conteúdo da folha sem recriar o painel. Antes, trocar cor,
+ * capacidade ou quantidade recriava o painel: a animação de subida rodava de
+ * novo (a folha descia ~400px para fora da tela e voltava) e a rolagem
+ * voltava ao topo.
+ */
+function fillSheet(dlg, html, cls = '') {
+  let panel = dlg.querySelector(':scope > .cat-sheet-panel');
+  if (!panel) {
+    panel = document.createElement('div');
+    panel.className = `cat-sheet-panel${cls ? ` ${cls}` : ''}`;
+    // o foco de abertura fica no painel (senão cai no X, que abria com anel azul)
+    panel.tabIndex = -1;
+    panel.setAttribute('autofocus', '');
+    dlg.appendChild(panel);
+  }
+  const top = panel.scrollTop;
+  panel.innerHTML = html;
+  panel.scrollTop = top;
+  return panel;
+}
 
 /** Desce a folha (ou some, no computador) antes de remover. */
 function animateClose(dlg, after) {

@@ -379,6 +379,11 @@ button, a, input, select, textarea, label, summary {
   .step { flex: none; }
   .steps .step-cancel { flex: none; margin-left: var(--sp-2); }
 
+  /* Botão de texto comprido numa fileira que quebra (ex.: "Restaurar pedidos
+     de um backup"): o texto quebra dentro do botão em vez de empurrar a tela
+     inteira para o lado no iPhone SE. */
+  .row.wrap > .btn { max-width: 100%; white-space: normal; text-align: center; }
+
   .detail-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--sp-3); }
   .detail-item dd { font-size: var(--fs-base); overflow-wrap: anywhere; }
   .detail-item dd.truncate { white-space: normal; overflow: visible; }
